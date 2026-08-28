@@ -20,7 +20,7 @@ from analysis.president_esi_analysis import *
 from analysis.analysis_type import AnalysisItemType
 from components.esi_year import YearSelector, ESIYearStyle
 from components.subject_info import *
-import db_schema
+import common.db_schema as db_schema
 
 
 regReportTableName = "AC_Manager.dbo.RegReportTest" if DEBUG else "AC_Manager.dbo.RegReport"

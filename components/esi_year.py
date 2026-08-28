@@ -9,7 +9,7 @@ from rich import print as rprint
 
 
 # PRIS
-import db_schema
+import common.db_schema as db_schema
 
 class ESIYearStyle(Enum):
     Style1 = 0

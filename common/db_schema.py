@@ -70,5 +70,4 @@ class ESISchema(DBSchema):
 
 
 
-
 schema : Optional[ESISchema] = None

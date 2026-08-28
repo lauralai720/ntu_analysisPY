@@ -7,11 +7,11 @@ import pandas as pd
 from datetime import datetime
 
 # PRIS 相關套件
-import db_schema
+import common.db_schema as db_schema
 from components.subjects import Subjects
 from dal_provider import get_dal
 from components.esi_year import ESIYear
-from util import DataTableFormatter
+from common.util import DataTableFormatter
 
 dal = get_dal()
 

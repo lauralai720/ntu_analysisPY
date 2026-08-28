@@ -11,7 +11,7 @@ from collections import defaultdict
 # PRIS DLL
 from dal_provider import get_dal
 
-import db_schema
+import common.db_schema as db_schema
 from components.subjects import Subjects
 from components.template import *
 from export.report_exporter import *

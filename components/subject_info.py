@@ -1,8 +1,8 @@
 
 
 
-import db_schema
-import locale_manager
+import common.db_schema as db_schema
+import common.locale_manager as locale_manager
 
 class ESISubjectInfo:
     def __init__(self, name_en, name_ch):
