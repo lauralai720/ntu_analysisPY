@@ -360,7 +360,7 @@ class E6(Template):
     def get_cell_row(self, r:int, row : list[str]) -> list[ECell] :
         r_cells = []
         end =  ((len(row) - 4) // 5) * 3 + 4
-        for c in range(1, end):
+        for c in range(1, end+1):
             if c <= 4:
                 r_cells.append(ECell(
                     text=row[c-1],
