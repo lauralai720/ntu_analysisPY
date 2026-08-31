@@ -184,15 +184,6 @@ class FieldSubjectType:
     selected_values : list[str]
     shown_by_esiid : bool = False
 
-# @dataclass
-# class FieldsID:
-#     maj_id : str
-#     sub_ids : list[str]
-
-# @dataclass
-# class FieldsName:
-#     maj : str
-#     sub_fields : list[str]
 
 @dataclass
 class PresidentAnalysis(Anaysis):

@@ -1,10 +1,7 @@
-
-import copy
 from dataclasses import dataclass,field
 from typing import Optional
 
 from components.esi_year import ESIYear
-
 
 
 @dataclass
@@ -25,21 +22,6 @@ class Subjects:
     Subject1Type : str = ""
     Subject2Type : str = ""
     ShownByESI_ID: bool = False # ESIFieldSelectedValue.ShownByESI_ID
-        # public Subject Subject1 { get; set; }
-        # public Subject Subject2 { get; set; }
-        # public Subject Year { get; set; }
-        # public Dictionary<string, Column> Subj1BindCol { get; set; } 
-        # public Dictionary<string, Column> Subj2BindCol { get; set; }
-        # public Dictionary<string, Column> YearBindCol { get; set; }
-        # public SelectedValue SelectedVal1 { get; set; } 先改成List<String>，因為是有其他class 繼承 SelectedValue
-        # public SelectedValue SelectedVal2 { get; set; }
-        # public SelectedValue SelectedYear { get; set; }
-        # public string Subject1Header { get; set; }
-        # public string Subject2Header { get; set; }
-        # public string YearHeader { get; set; }
-        # public List<Year> YearList { get; set; }
-        # public string Subject1Type { get; set; }
-        # public string Subject2Type { get; set; }
 
 
 

@@ -1,7 +1,7 @@
 #python 需要套件(繼承、自訂型態等等)
 from abc import ABC
 from dataclasses import dataclass,field
-from typing import Callable, Optional, TypeAlias, TYPE_CHECKING
+from typing import Callable, Optional, TypeAlias
 from functools import cached_property
 import pandas as pd
 from datetime import datetime
@@ -252,7 +252,6 @@ class ESIMetrics(Metrics):
     ### E1
     @cached_property
     def paper_count(self) -> pd.DataFrame:
-        #dal = get_dal()    
         res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.PaperCountColumnName, dist=False)))
         return res
     @cached_property
@@ -265,8 +264,6 @@ class ESIMetrics(Metrics):
     ### E2
     @cached_property
     def cited(self) -> pd.DataFrame:
-
-#        dal = get_dal()    
         res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.CiteColumnName, dist=False)))
         return res
     @cached_property
@@ -281,16 +278,12 @@ class ESIMetrics(Metrics):
         return self.div_data_tables(self.cited, self.paper_count)
     ### E4
     @cached_property
-    def hici(self) -> pd.DataFrame:
-
-#        dal = get_dal()    
+    def hici(self) -> pd.DataFrame: 
         res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.HighlyCitedPaperCountColumnName, dist=False)))
         return res
     ### E5
     @cached_property
     def hot(self) -> pd.DataFrame:
-
-#        dal = get_dal()    
         res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.HotPaperColumnName, dist=False)))
         return res
 
@@ -306,8 +299,6 @@ class ESIMetrics(Metrics):
         if is_ac:
             cmd_str += f" WHERE Info.{db_schema.schema.OrgSerialColumnName} != ''"
 
-
-#        dal = get_dal()
         qret = dal.query_2d_raw(cmd_str)
         qert_arr = []
         for x in qret:
@@ -466,8 +457,6 @@ class ESIMetrics(Metrics):
 
         cmd_str += f" GROUP BY {db_schema.schema.ESIUpdateTimeColumnName}, {db_schema.schema.InstitutionColumnName}{select_field_name}"
 
-
-#        dal = get_dal()
         query_res = dal.query_2d_raw(cmd_str)
 
         ret: VERSION_FIELD_RANK = {}
@@ -527,8 +516,6 @@ class ESIMetrics(Metrics):
 
         cmd_str += f" GROUP BY {db_schema.schema.ESIUpdateTimeColumnName}, {db_schema.schema.InstitutionColumnName}{select_field_name}"
 
-
-#        dal = get_dal()
         query_res = dal.query_2d_raw(cmd_str)
 
         # 第二 + 三階段:依 version 分組,組內再依 field 分組
@@ -564,7 +551,6 @@ class ESIMetrics(Metrics):
         dtf.add(df1)
         dtf.add(df2)
 
-#        dal = get_dal()
         res = dal.a08_cntavg_calculate(dtf.get_data_frame(), 2 + self.DECIMAL_PLACES if use_percent_age else self.DECIMAL_PLACES)
         res = res.drop(columns=["Column1","Column2"])
 
