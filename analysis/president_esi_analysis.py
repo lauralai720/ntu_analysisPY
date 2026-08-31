@@ -18,6 +18,7 @@ from export.report_exporter import *
 from export.output_tab import *
 from analysis.metrics import ESIMetrics
 from components.esi_field import * 
+from exceptions import PRISError
 
 script_dir = Path(__file__).parent.parent
 dal = get_dal()
@@ -158,7 +159,7 @@ class PresidentESIReportItem:
     
     def get_num_ch(self,i) -> str:
         if (i <=0 or i >= 100):
-            raise ValueError("數值不正確")
+            raise PRISError(f"表單Index數值不正確，{i}，正確範圍1~99")
         ret = ""
         if (i>9):
             if (i<20):
@@ -619,25 +620,29 @@ class PresidentAnalysis(Anaysis):
     def _fetch_field_cited_top3Org(self) -> dict[str, list[str]]:
         return self.get_top_3Org(db_schema.schema.CiteColumnName)
 
-    def run(self, report : PresidentESIReport):
+    ## 計算
+    def run(self, report : PresidentESIReport) -> ReportExporter:
         report.shown_time = self.main_ver
-        re = ReportExporter()
+        re_export = ReportExporter()
 
         total = len(report.items) # 進度條用
         for idx, ritem in enumerate(report.items):
             tmpl, rows = self.generate_report(ritem, ritem.to_sheet_name(report))
-            re.add_item(tmpl, rows)
+            re_export.add_item(tmpl, rows)
 
             # 暫時 - 更新進度條
             percent = (idx + 1) / total
             bar = "█" * int(20 * percent) + "-" * (20 - int(20 * percent))
             print(f"\r處理進度: [{bar}] {int(percent * 100)}%", end="", flush=True)
 
-        print()  # 4. 整個迴圈結束後換行
+        print()  # 4. 整個迴圈結束後換行        
 
+        return re_export
 
+    ## 匯出
+    def export(self, report : PresidentESIReport, re_export: ReportExporter):
         print("準備匯出檔案....")
-        # 直接 run 匯出
+        # 匯出
         now = datetime.now().strftime("%y-%m-%d %H%M%S")
         filename = f"ESI校長報表_{now}"
         output_path = f"{report.output_path}{filename}.xlsx"
@@ -645,9 +650,9 @@ class PresidentAnalysis(Anaysis):
         if output_path:
             print(f"你選擇的資料夾:{output_path}")
         else:
-            print("沒有選擇資料夾")
+            raise PRISError("沒有選擇資料夾")
 
-        re.export(output_path)
+        re_export.export(output_path)
 
 
     def generate_report(self, item : PresidentESIReportItem, sheet_name : str) -> tuple[Template, list[list[str]]] :
@@ -673,8 +678,9 @@ class PresidentAnalysis(Anaysis):
 
         if template_type not in builders:
             # raise ValueError(f"未知的 type:{template_type}")
-            print(f"未知的 type:{template_type}")
-            return tmpl, temp_rows
+            #print(f"未知的 type:{template_type}")
+            raise PRISError(f"未知的TemplateType:{template_type}")
+            #return tmpl, temp_rows
 
         tmpl, temp_rows = builders[template_type]()
         return tmpl, temp_rows
