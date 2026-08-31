@@ -28,22 +28,22 @@ def main():
     parser.add_argument("--model-id", required=True, help="模組ID，國內研究型大學- 1, 台大與亞太鄰近大學- 2")
     parser.add_argument("--main-version", required=True, help="主要版本，格式 yyyy-MM-dd")
     parser.add_argument("--compare-version", required=True, help="比較版本，格式 yyyy-MM-dd")
-    parser.add_argument("--output", default="../PRIS_OUTPUT//", help="輸出檔案路徑")
+    parser.add_argument("--output-path", default="../PRIS_OUTPUT//", help="輸出檔案路徑")
 
 
     if DEBUG:
-        analysis_type = AnalysisItemType(DEFAULT_ANALYSIS_TYPE) #AnalysisItemType.PaperPresidentReportESI
+        analysis_type = DEFAULT_ANALYSIS_TYPE #AnalysisItemType.PaperPresidentReportESI
         model_id = DEFAULT_MODEL_ID # 1
         main_version = DEFAULT_MAIN_VER # "2026-03-12" 
         comp_version = DEFAULT_COMP_VER # "2025-03-13"
         output_path = DEFAULT_OUTPUT_PATH # "../PRIS_OUTPUT//"
     else:
         args = parser.parse_args()
-        analysis_type = AnalysisItemType(int(args.analysis_type))
+        analysis_type = int(args.analysis_type)
         model_id = int(args.model_id)
         main_version = args.main_version
         comp_version = args.compare_version
-        output_path = args.output
+        output_path = args.output_path
 
     try:
         run_report(analysis_type= analysis_type, model_id= model_id, main_version=main_version, comp_version=comp_version, output_path= output_path)
