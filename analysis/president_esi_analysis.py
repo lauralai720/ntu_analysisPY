@@ -1018,15 +1018,20 @@ class PresidentAnalysis(Anaysis):
         sp_res, sum_f = try_parse_float(sum)
         vp_res, val_f = try_parse_float(val)
         if sp_res and vp_res and sum_f:
-            return str(val_f/sum_f)
+            rat = val_f/sum_f
+            rat = f"{rat:.16f}"
+            return rat
         return ""
 
     @staticmethod
     def get_growth_rate(pre_val :str, cur_val :str) -> str:
         pp_res, pre_f = try_parse_float(pre_val)
         cp_res, cur_f = try_parse_float(cur_val)
+
         if pp_res and cp_res and cur_f:
-            return str((cur_f - pre_f) / pre_f)
+            rat = (cur_f - pre_f) / pre_f
+            rat = f"{rat:.16f}"
+            return rat
         return ""
 
     @staticmethod

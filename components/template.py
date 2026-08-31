@@ -107,6 +107,7 @@ class Template(ABC):
         return f"{get_column_letter(c)}{r}"
 
     def rawdata_to_worksheet(self, wb : Workbook, rows: list[list[str]] ):
+        from common.util import convert_type
         # 為了辨別ws是Worksheet加了: Worksheet
         ws :Worksheet = wb.create_sheet(self.rawdata_tab_name) 
         r = 1
@@ -114,7 +115,7 @@ class Template(ABC):
             c = 1
             for col in row:
                 cell = ws.cell(r,c)
-                cell.value = col
+                cell.value = convert_type(col)
                 if not col:
                     self.null_val_loc.add(f"{r},{c}")
                 c += 1
@@ -599,7 +600,7 @@ class F3(Template):
             elif (c == 2 or (c - 3) % 4 == 1) or ((c - 3) % 4 == 2):
                 r_cells.append(ECell(text=self.DefaultExcelFuncInteger.format(self.get_cell_loc_str(r,c)), is_formula=True))
             elif ((c-3) % 4 == 3):
-                r_cells.append(ECell(text=self.DefaultExcelFuncInteger.format(self.get_cell_loc_str(r,c)), is_formula=True))
+                r_cells.append(ECell(text=self.DefaultExcelFuncProgress.format(self.get_cell_loc_str(r,c)), is_formula=True))
             else:
                 r_cells.append(ECell(text=self.DefaultExcelFunc2DecimalPlace.format(self.get_cell_loc_str(r,c)), is_formula=True))
             c+=1

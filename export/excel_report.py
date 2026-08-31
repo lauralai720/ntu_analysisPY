@@ -7,26 +7,6 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill
 from openpyxl.cell.cell import MergedCell
 
-## 因為如果值是數字，用string方式寫入excel欄位，excel會跳警告(是數字還是文字)
-## 所以如果是數字要先轉換才不會有警告
-def convert_type(text_value):
-    # 若為空值或 None 直接回傳
-    if not text_value:
-        return text_value
-        
-    # 去除前後空白
-    text_value = text_value.strip()
-    
-    try:
-        # 嘗試轉換成整數 (例如 "19")
-        if text_value.isdigit() or (text_value.startswith('-') and text_value[1:].isdigit()):
-            return int(text_value)
-            
-        # 嘗試轉換成浮點數 (例如 "19.5")
-        return float(text_value)
-    except ValueError:
-        # 轉換失敗代表是純文字 (例如 "text")，直接回傳原字串
-        return text_value
 
 @dataclass
 class ECell:
@@ -143,6 +123,7 @@ class ExcelReport():
             sub_x += sub_col.get_span()
 
     def render_rows(self, ws : Worksheet, rows: list[list[ECell]], start_row_num : int):
+        from common.util import convert_type
         r = start_row_num
         for row in rows:
             c = 1
