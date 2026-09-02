@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, field
-from enum import Enum, auto
+
 from datetime import datetime
 from typing import Callable, Generic, Optional, TypeVar, TypeAlias
 from pathlib import Path
@@ -41,21 +41,6 @@ def try_parse_float(string_val)-> tuple[bool, float]:
         # 失敗（例如字串是 "abc" 或 None），回傳 (False, 預設值 0.0)
         return False, 0.0
 
-
-class TemplateType(Enum):
-    E1 = 0
-    E2 = auto()
-    E3 = auto()
-    E4 = auto()
-    E5 = auto()
-    E6 = auto()
-    E7 = auto()
-    F1 = auto()
-    F2 = auto()
-    F3 = auto()
-    F4 = auto()
-    F5 = auto()
-    F6 = auto()
 
 @dataclass
 class OrgInfo:

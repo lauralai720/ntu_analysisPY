@@ -256,7 +256,7 @@ class ESIMetrics(Metrics):
         return res
     @cached_property
     def world_paper_count_rank(self) -> pd.DataFrame:
-        return self.world_rank(self.paper_count, self.get_workrank_of_selected_version(db_schema.schema.PaperCountColumnName)) 
+        return self.world_rank(self.paper_count, self.get_world_rank_of_selected_version(db_schema.schema.PaperCountColumnName)) 
     @cached_property
     def asia_pacific_paper_count_rank(self) -> pd.DataFrame:
         #return AsiaPacificRank(paperCount.Value, schema.PaperCountColumnName)
@@ -268,7 +268,7 @@ class ESIMetrics(Metrics):
         return res
     @cached_property
     def world_cited_rank(self) -> pd.DataFrame:
-        return self.world_rank(self.cited, self.get_workrank_of_selected_version(db_schema.schema.CiteColumnName)) 
+        return self.world_rank(self.cited, self.get_world_rank_of_selected_version(db_schema.schema.CiteColumnName)) 
     @cached_property
     def asia_pacific_cited_rank(self) -> pd.DataFrame:
         return self.asia_pacific_rank(self.cited, db_schema.schema.CiteColumnName)
@@ -477,7 +477,7 @@ class ESIMetrics(Metrics):
         return ret
         
 
-    def get_workrank_of_selected_version(self, col_name: str, func_str : str = None)->VERSION_FIELD_RANK:
+    def get_world_rank_of_selected_version(self, col_name: str, func_str : str = None)->VERSION_FIELD_RANK:
         if func_str == None:
             func_str = f"SUM({col_name})"
         if col_name not in self._world_rank:

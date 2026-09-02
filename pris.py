@@ -186,13 +186,13 @@ def run_president_esi_report(model_id:int, main_version: str, comp_version: str,
 
     if orgs is not None:
         print(f"{project_name} 中的 機構列表 : ")
-        for x in orgs:
-            print(f"{x}")
+        orgs_name = "、".join(x for x in orgs)
+        print(f"{orgs_name}")
 
     if fields is not None:
         print(f"{project_name} 中的 領域列表 : ")
-        for x in fields:
-            print(f"{x}")
+        fields_name = "、".join(x for x in fields)
+        print(f"{fields_name}")
 
     if esi_report is not None:
         esi_report.output_path = output_path
@@ -243,7 +243,7 @@ def run_report(analysis_type: int, model_id:int, main_version: str, comp_version
         raise PRISError("DB連線設定失敗")
     
     rprint("[green]DB連線設定成功[/green]")
-    
+
     analysis_type = AnalysisItemType(analysis_type)
 
     if analysis_type != AnalysisItemType.PaperPresidentReportESI:

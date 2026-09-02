@@ -15,7 +15,6 @@ import dotnet_setup
 
 DLL_DIR = Path(__file__).parent / "dlls"
 
-
 from components.subjects import Subjects
 
 class DataAccessLayer:

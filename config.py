@@ -3,6 +3,8 @@ import os
 
 ENV = os.environ.get("APP_ENV", "dev")  # 預設是 dev,可以透過環境變數改成 prod
 
+ESI_FIELD_SORT =  ["工學","生命科學","社科","理學","農學","醫學","跨領域"]
+
 if ENV == "dev":
     DEBUG=True
     DEFAULT_DB_IP="140.112.180.160"

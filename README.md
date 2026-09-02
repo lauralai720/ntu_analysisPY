@@ -9,6 +9,10 @@ run_report(analysis_type: int, model_id:int, main_version: str, comp_version: st
 
 main.py測試用的呼叫方式</br>
 python main.py --model-id 2 --main-version 2026-03-12 --compare-version 2025-03-13</br>
+```
+-- 若要使用main測試，請記得環境設定成prod
+-- $env:APP_ENV="prod"
+```
 
 **參數說明**
 1. analysis_type - 分析項目

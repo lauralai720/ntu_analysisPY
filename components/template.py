@@ -4,10 +4,28 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.utils import get_column_letter
 from abc import ABC, abstractmethod
+from enum import Enum, auto
+
+#config
+from config import *
 
 # PRIS
 from export.excel_report import *
 
+class TemplateType(Enum):
+    E1 = 0
+    E2 = auto()
+    E3 = auto()
+    E4 = auto()
+    E5 = auto()
+    E6 = auto()
+    E7 = auto()
+    F1 = auto()
+    F2 = auto()
+    F3 = auto()
+    F4 = auto()
+    F5 = auto()
+    F6 = auto()
 
 # 每一個sheet的資料
 @dataclass
@@ -27,6 +45,7 @@ class Template(ABC):
     DefaultExcelFunc2DecimalPlace : str = "=TEXT({0}, \"0.00\")"
     DefaultExcelFuncProgress : str = "=TEXT({0}, \"+##,#0;-##,#0;##,0\")"
     RawdataSheetSuffix :str = "rawdata"
+    template_type: TemplateType | None = None # 新增的，原程式沒有
 
     @property
     def sheet_tab_name(self) -> str:
@@ -51,20 +70,55 @@ class Template(ABC):
     def get_report(self) -> ExcelReport:
         pass
 
+    @property
+    def sort_col_idx(self) -> int:
+        return 0
+
+    # 部分報表需要排序
+    def sort_rows(self, rows: list[list[str]]) -> list[list[str]]:
+        sort_rows = []
+        ## 判斷需要排序的表單(E1~E5)，如果沒有此需求可以移除
+        if TemplateType.E1.value <= self.template_type.value <= TemplateType.E5.value:
+            sort_idx = self.sort_col_idx
+            if sort_idx != 0:
+                sort_rows = sorted(rows, key=lambda x: float(x[sort_idx]), reverse=True)
+        ## 針對領域做排序，如果沒有此需求可以移除
+        elif self.template_type.value in (TemplateType.F5.value, TemplateType.F6.value):
+            for s_field in ESI_FIELD_SORT:
+                sort_rows.extend([x for x in rows if x[0] == s_field and len(x) > 2])
+
+        return sort_rows if sort_rows else rows
+    
+    # 有排序過的報表，公式對應的idx要替換成原順序
+    def get_original_row_idx(self,now_idx:int, rows: list[list[str]], check_row:list[str]) -> int :
+        if TemplateType.E1.value <= self.template_type.value <= TemplateType.E5.value:
+            original_r = next(o_idx  for o_idx, x in enumerate(rows) if check_row[0] == x[0])
+        elif self.template_type.value in (TemplateType.F5.value, TemplateType.F6.value):
+            original_r =  next(o_idx  for o_idx, x in enumerate(rows) if check_row[1] == x[1] and check_row[0] == x[0])
+        else:
+            original_r = now_idx
+        return original_r
+
     def to_worksheet(self, wb : Workbook, rows: list[list[str]] ):
         self.rows = rows
+        ## 建立rawdata_sheet
         self.rawdata_to_worksheet(wb, rows)
+
+        self.rows = self.sort_rows(rows)
 
         report = self.get_report()
         report_rows : list[list[ECell]] = []
-        for idx, rr in enumerate(rows):
-            rcells = self.get_cell_row(idx+1, rr)
+        for idx, rr in enumerate(self.rows):
+            
+            row_idx = self.get_original_row_idx(idx, rows, rr)
+            #rcells = self.get_cell_row(idx+1, rr)
+            rcells = self.get_cell_row(row_idx+1, rr)
             report_rows.append(rcells)
 
+        self.rows = rows
         report.rows = report_rows
         report.export(wb, self.sheet_tab_name)   
         
-
     def get_cell_row(self, r:int, row : list[str]) -> list[ECell] :
         r_cells = []
         c = 1
@@ -136,6 +190,7 @@ class E1(Template):
             12: Template.DefaultExcelFuncProgress,
         }
         self._cols_without_format: set[int] = {1, 2, 3, 4}
+        self.template_type = TemplateType.E1
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -148,6 +203,10 @@ class E1(Template):
     @property
     def val_col_header_name(self) -> str:
         return "論文篇數"
+
+    @property
+    def sort_col_idx(self) -> int:
+        return 4    
     
     def get_report(self) -> ExcelReport:
         report = ExcelReport()
@@ -178,7 +237,7 @@ class E1(Template):
 class E2(E1):
     def __init__(self, sheet_name: str, main_ver: str, comp_ver: str, sheet_index: int):
         super().__init__(sheet_name, main_ver, comp_ver, sheet_index)  
-
+        self.template_type = TemplateType.E2
     @property
     def val_col_header_name(self) -> str:
         return "被引次數"
@@ -196,6 +255,7 @@ class E3(Template):
             9: Template.DefaultExcelFuncProgress
         }
         self._cols_without_format: set[int] = {1, 2, 3, 4}
+        self.template_type = TemplateType.E3
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -208,6 +268,10 @@ class E3(Template):
     @property
     def val_col_header_name(self) -> str:
         return "平均被引次數"
+
+    @property
+    def sort_col_idx(self) -> int:
+        return 4
     
     def get_report(self) -> ExcelReport:
         report = ExcelReport()
@@ -244,6 +308,7 @@ class E4(Template):
             11:self.excel_func3
         }
         self._cols_without_format: set[int] = {1, 2, 3, 4}
+        self.template_type = TemplateType.E4
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -262,6 +327,10 @@ class E4(Template):
     @property
     def hici_ratio_col_header_name(self) -> str:
         return "高被引論文比率"
+
+    @property
+    def sort_col_idx(self) -> int:
+        return 4
     
     def get_report(self) -> ExcelReport:
         report = ExcelReport()
@@ -297,6 +366,7 @@ class E5(Template):
 
         }
         self._cols_without_format: set[int] = {1, 2, 3, 4}
+        self.template_type = TemplateType.E5
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -305,6 +375,10 @@ class E5(Template):
     @property
     def ColsWithoutFormat(self) -> set[int]:
         return self._cols_without_format
+
+    @property
+    def sort_col_idx(self) -> int:
+        return 4
     
     def get_report(self) -> ExcelReport:
         report = ExcelReport()
@@ -324,6 +398,7 @@ class E6(Template):
     def __init__(self, sheet_name: str, fields:list[tuple[str,list[str]]], sheet_index: int):
         super().__init__(sheet_name, "", "", sheet_index)  # 對應 : base(...)
         self.fields = fields
+        self.template_type = TemplateType.E6
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -399,6 +474,8 @@ class E6(Template):
 class E7(E6):
     def __init__(self, sheet_name, fields, sheet_index):
         super().__init__(sheet_name, fields, sheet_index)
+        self.template_type = TemplateType.E7
+
     @property
     def val_col_header_name(self) -> str:
         return "被引次數"
@@ -407,6 +484,7 @@ class F1(Template):
     def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
         super().__init__(sheet_name, main_ver, "", sheet_index)  # 對應 : base(...)
         self.orgs = orgs
+        self.template_type = TemplateType.F1
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -496,6 +574,7 @@ class F1(Template):
 class F2(F1):
     def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
         super().__init__(sheet_name, main_ver, orgs, sheet_index)  # 對應 : base(...)
+        self.template_type = TemplateType.F2
 
     @property
     def RankingType(self) -> str:
@@ -505,6 +584,7 @@ class F3(Template):
     def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
         super().__init__(sheet_name, main_ver, "", sheet_index)  # 對應 : base(...)
         self.orgs = orgs
+        self.template_type = TemplateType.F3
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -625,6 +705,7 @@ class F3(Template):
 class F4(F3):
     def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
         super().__init__(sheet_name, main_ver, orgs, sheet_index)  # 對應 : base(...)
+        self.template_type = TemplateType.F4
 
     @property
     def RankingType(self) -> str:
@@ -644,6 +725,7 @@ class F5(Template):
             11: Template.DefaultExcelFuncInteger,
         }
         self._cols_without_format: set[int] = {1, 2, 3, 6, 9}
+        self.template_type = TemplateType.F5
         
     @property
     def excel_func(self) -> dict[int, str]:
@@ -685,6 +767,7 @@ class F5(Template):
 class F6(F5):
     def __init__(self, sheet_name: str, sheet_index: int):
         super().__init__(sheet_name, sheet_index)  # 對應 : base(...)
+        self.template_type = TemplateType.F6
 
     @property
     def val_col_header_name(self) -> str:
