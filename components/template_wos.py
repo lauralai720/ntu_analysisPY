@@ -487,22 +487,22 @@ class S9(S4):
     def __init__(self, sheet_name, sheet_index, tab_name):
         super().__init__(sheet_name, sheet_index, tab_name)
 
-    # def get_report(self) -> ExcelReport:
-    #     report = ExcelReport()
-    #     banner=ExcelColumnHeader(name=self.sheet_name, horizontal_align="center")
-    #     serial_top = ExcelColumnHeader()
-    #     serial_top.sub_headers = [ExcelColumnHeader(name="機構編碼", horizontal_align= "left", width=15)]
-    #     serial_name1_top = ExcelColumnHeader()
-    #     serial_name1_top.sub_headers= [ExcelColumnHeader(name="機構名稱1", horizontal_align= "left", width=15)]
-    #     serial_name2_top = ExcelColumnHeader()
-    #     serial_name2_top.sub_headers= [ExcelColumnHeader(name="機構名稱2", horizontal_align= "left", width=15)]
-    #     years = self.get_year_list(is_range=True)
-    #     years_headers = []
-    #     for y in years :
-    #         year_header = ExcelColumnHeader(name=y, horizontal_align="center", width=20)
-    #         years_headers.append(year_header)
+    def get_report(self) -> ExcelReport:
+        report = ExcelReport()
+        banner=ExcelColumnHeader(name=self.sheet_name, horizontal_align="center")
+        serial_top = ExcelColumnHeader()
+        serial_top.sub_headers = [ExcelColumnHeader(name="機構編碼", horizontal_align= "left", width=15)]
+        serial_name1_top = ExcelColumnHeader()
+        serial_name1_top.sub_headers= [ExcelColumnHeader(name="機構名稱1", horizontal_align= "left", width=15)]
+        serial_name2_top = ExcelColumnHeader()
+        serial_name2_top.sub_headers= [ExcelColumnHeader(name="機構名稱2", horizontal_align= "left", width=15)]
+        years = self.get_year_list(is_range=True)
+        years_headers = []
+        for y in years :
+            year_header = ExcelColumnHeader(name=y, horizontal_align="center", width=20)
+            years_headers.append(year_header)
 
-    #     banner.sub_headers = years_headers
-    #     report.headers = [serial_top, serial_name1_top, serial_name2_top, banner]
-    #     return report   
+        banner.sub_headers = years_headers
+        report.headers = [serial_top, serial_name1_top, serial_name2_top, banner]
+        return report   
 

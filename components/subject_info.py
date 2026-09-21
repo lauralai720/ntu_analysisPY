@@ -445,28 +445,65 @@ class WOSPaperOrgSubjectInfo:
         ret = dal.create_subject(tblMain, tblMain.ShownColumn)
 
         ret.Initialize()
+        concat_list = {
+            "TWU000001100000" : ["TWU000001110000"],
+            "TWU00000110%" : ["TWU00000111%"],
+            "TWU000001120000" : ["TWU000001130000", "TWU000001140000"],
+            "TWU00000112%" : ["TWU00000113%", "TWU00000114%"],
+            "TWU0000010663%" : ["TWU0000012337%"],
+            "TWU000001066300" : ["TWU000001233700"],
+            "TWU0000010827%" : ["TWU0000010822%", "TWU0000010824%"],
+            "TWU000001082700" : ["TWU000001082200", "TWU000001082400"],
+            "TWU0000012310%" : ["TWU0000012319%"],
+            "TWU000001231000" : ["TWU000001231900"],
+            "TWU0000012301%" : ["TWU0000012333%"],
+            "TWU000001230100" : ["TWU000001233300"],
+        }
         for org in orgs:
             for org_item in org.items:
                 restrict_org = None
                 if isinstance(org_item, PaperOrg2ndItem):
                     tblOrg.SetFullName(db_schema.schema.Org2ndTableName)
                     restrict_org = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, org_item.query_var)
-                    if org_item.query_var == "TWU000001100000":
-                        restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU000001110000")
-                        restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
-                    elif org_item.query_var == "TWU00000110%":
-                        restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU00000111%")
-                        restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
-                    elif org_item.query_var == "TWU000001120000":
-                        restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU000001130000")
-                        restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
-                        restrict_org3 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU000001140000")
-                        restrict_org = dal.create_where_multiple([restrict_org, restrict_org3], dal.OPTYPE.Or)
-                    elif org_item.query_var == "TWU00000112%":
-                        restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU00000113%")
-                        restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
-                        restrict_org3 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU00000114%")
-                        restrict_org = dal.create_where_multiple([restrict_org, restrict_org3], dal.OPTYPE.Or)
+
+                    if org_item.query_var in concat_list:
+                        for concat_org_serial in concat_list[org_item.query_var]:
+                            restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, concat_org_serial)
+                            restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+
+                    # if org_item.query_var == "TWU000001100000":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU000001110000")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU00000110%":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU00000111%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU000001120000":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU000001130000")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    #     restrict_org3 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU000001140000")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org3], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU00000112%":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU00000113%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    #     restrict_org3 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU00000114%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org3], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU000001066300":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU000001233700")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU0000010663%":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU0000012337%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU0000010827%":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU0000010822%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    #     restrict_org3 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU0000010824%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org3], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU0000012310%":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU0000012319%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    # elif org_item.query_var == "TWU0000012301%":
+                    #     restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU0000012333%")
+                    #     restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
                     
                 else:
                     tblOrg.SetFullName(db_schema.schema.Org1stTableName)
