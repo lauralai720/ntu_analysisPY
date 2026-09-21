@@ -1,5 +1,8 @@
 import pandas as pd
 
+# PRISUtilityKit.DBAL.Lib.Utils.Delimiter
+DELIMITER = "\x1c"
+
 class DataTableFormatter:
     def __init__(self,s1_h:str,s2_h:str,y_h:str,ex_list:list[str] = None):
         #self.set_data: set[tuple[str, ...]] = set()
@@ -141,7 +144,10 @@ def convert_type(text_value):
     # 若為空值或 None 直接回傳
     if not text_value:
         return text_value
-        
+
+    if not isinstance(text_value, str):
+        return text_value
+           
     # 去除前後空白
     text_value = text_value.strip()
     
@@ -155,3 +161,21 @@ def convert_type(text_value):
     except ValueError:
         # 轉換失敗代表是純文字 (例如 "text")，直接回傳原字串
         return text_value
+
+@staticmethod
+def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int = 0) -> list[str]:
+    if year_list:
+        int_years = [int(x) for x in year_list]
+        min_y = min(int_years)
+        max_y = max(int_years)
+
+    start_y= min_y
+    stop_y = max_y
+    select_years = []
+
+    while (start_y + 2) <= stop_y:
+        end_y = start_y + 3 - 1
+        select_years.append(f"{start_y}-{end_y}")
+        start_y = start_y+1
+
+    return select_years

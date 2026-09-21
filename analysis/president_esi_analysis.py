@@ -14,6 +14,7 @@ from dal_provider import get_dal
 import common.db_schema as db_schema
 from components.subjects import Subjects
 from components.template import *
+from components.template_esi import *
 from export.report_exporter import *
 from export.output_tab import *
 from analysis.metrics import ESIMetrics
@@ -171,7 +172,7 @@ class FieldSubjectType:
 
 
 @dataclass
-class PresidentAnalysis(Anaysis):
+class PresidentESIAnalysis(Anaysis):
     main_ver : str = ""
     comp_ver : str = ""
     main_ver_short : str = ""
@@ -408,16 +409,16 @@ class PresidentAnalysis(Anaysis):
     # 對應 getAllFieldsSubjects
     def _fetch_all_fields_subj(self):
         selected_vals = ["1"]
-        subj, bind_cols = db_schema.schema.ESIFieldInfo.get_subject(selected_values=selected_vals)
+        subj, bind_cols, selected_val, _,_= db_schema.schema.ESIFieldInfo.get_subject(selected_values=selected_vals)
 
-        return FieldSubjectType(subject=subj, bind_cols=bind_cols, selected_values=selected_vals)
+        return FieldSubjectType(subject=subj, bind_cols=bind_cols, selected_values=selected_val)
     
     # getSubFieldsSubjects
     def _fetch_sub_fields_subj(self):
         selected_vals = self.subjects.selectedVal2
         shown_by_esiid = True
-        subj, bind_cols = db_schema.schema.ESIFieldInfo.get_subject(selected_values=selected_vals,shown_by_esiid=shown_by_esiid)
-        return FieldSubjectType(subject=subj, bind_cols=bind_cols, selected_values=selected_vals,shown_by_esiid=shown_by_esiid)
+        subj, bind_cols, selected_val ,_,_ = db_schema.schema.ESIFieldInfo.get_subject(selected_values=selected_vals,shown_by_esiid=shown_by_esiid)
+        return FieldSubjectType(subject=subj, bind_cols=bind_cols, selected_values=selected_val,shown_by_esiid=shown_by_esiid)
 
     ## getMajFieldsAndSubFields() / return list[tuple(str,list[str])]
     def _fetch_maj_fields_and_sub_fields(self) :
@@ -452,7 +453,7 @@ class PresidentAnalysis(Anaysis):
         # res : ORG_FIELD_VERSION_VALUE = {
         #     "TWU000001" : {"1" : {"2026-03-12":"58191", "2025-03-13":"57453"}},...
         # }
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.paper_count)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.paper_count)
         return res
 
     ## getPaperCountWorldRankAllFields() => => parse(allFieldMetrics.WorldPaperCountRank())
@@ -460,7 +461,7 @@ class PresidentAnalysis(Anaysis):
         # res : ORG_FIELD_VERSION_VALUE = {
         #     "TWU000001" : {"1" : {"2026-03-12":"173", "2025-03-13":"162"}},...
         # }
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.world_paper_count_rank)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.world_paper_count_rank)
         return res
         
 
@@ -469,7 +470,7 @@ class PresidentAnalysis(Anaysis):
         # res : ORG_FIELD_VERSION_VALUE = {
         #     "TWU000001" : {"1" : {"2026-03-12":"52", "2025-03-13":"45"}},...
         # }
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.asia_pacific_paper_count_rank)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.asia_pacific_paper_count_rank)
         return res
 
     ### E2
@@ -478,7 +479,7 @@ class PresidentAnalysis(Anaysis):
         # res : ORG_FIELD_VERSION_VALUE = {
         #     "TWU000001" : {"1" : {"2026-03-12":"58191", "2025-03-13":"57453"}},...
         # }
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.cited)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.cited)
         return res
 
     ## getCitedWorldRankAllFields() => parse(allFieldMetrics.WorldCitedRank())
@@ -486,7 +487,7 @@ class PresidentAnalysis(Anaysis):
         # res : ORG_FIELD_VERSION_VALUE = {
         #     "TWU000001" : {"1" : {"2026-03-12":"173", "2025-03-13":"162"}},...
         # }
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.world_cited_rank)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.world_cited_rank)
         return res
         
 
@@ -495,33 +496,33 @@ class PresidentAnalysis(Anaysis):
         # res : ORG_FIELD_VERSION_VALUE = {
         #     "TWU000001" : {"1" : {"2026-03-12":"52", "2025-03-13":"45"}},...
         # }
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.asia_pacific_cited_rank)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.asia_pacific_cited_rank)
         return res
     ### E3
     ## getAvgCitedAllFields() => parse(allFieldMetrics.AvgCited())
     def _fetch_avg_cited_all_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.avg_cited)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.avg_cited)
         return res
     ### E4
     ## getHiCiAllFields() => parse(allFieldMetrics.Hici())
     def _fetch_hici_all_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.hici)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.hici)
         return res
     ### E5
     ### getHotAllFields() => parse(allFieldMetrics.Hot())
     def _fetch_hot_all_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.all_field_esi_metrics.hot)
+        res = PresidentESIAnalysis.parse(self.all_field_esi_metrics.hot)
         return res
 
     ### F1、F2
     def _fetch_paper_count_by_sub_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.sub_field_esi_metrics.paper_count)
+        res = PresidentESIAnalysis.parse(self.sub_field_esi_metrics.paper_count)
         return res
     def _fetch_paper_count_world_rank_by_sub_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.sub_field_esi_metrics.world_paper_count_rank)
+        res = PresidentESIAnalysis.parse(self.sub_field_esi_metrics.world_paper_count_rank)
         return res
     def _fetch_paper_count_asia_pacific_rank_by_sub_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.sub_field_esi_metrics.asia_pacific_paper_count_rank)
+        res = PresidentESIAnalysis.parse(self.sub_field_esi_metrics.asia_pacific_paper_count_rank)
         return res
 
     ### F3、F4
@@ -546,16 +547,16 @@ class PresidentAnalysis(Anaysis):
         return { str(q[0]) : str(q[1]) for q in q_res}
     
     def _fetch_cited_by_sub_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.sub_field_esi_metrics.cited)
+        res = PresidentESIAnalysis.parse(self.sub_field_esi_metrics.cited)
         return res   
     def _fetch_avg_cited_by_sub_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.sub_field_esi_metrics.avg_cited)
+        res = PresidentESIAnalysis.parse(self.sub_field_esi_metrics.avg_cited)
         return res
     def _fetch_cited_world_rank_by_sub_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.sub_field_esi_metrics.world_cited_rank)
+        res = PresidentESIAnalysis.parse(self.sub_field_esi_metrics.world_cited_rank)
         return res
     def _fetch_cited_asia_pacific_rank_by_sub_fields(self) -> ORG_FIELD_VERSION_VALUE:
-        res = PresidentAnalysis.parse(self.sub_field_esi_metrics.asia_pacific_cited_rank)
+        res = PresidentESIAnalysis.parse(self.sub_field_esi_metrics.asia_pacific_cited_rank)
         return res
 
     ### F5、F6
@@ -606,17 +607,18 @@ class PresidentAnalysis(Anaysis):
             tmpl, rows = self.generate_report(ritem, ritem.to_sheet_name(report))
             re_export.add_item(tmpl, rows)
 
-            # 暫時 - 更新進度條
-            percent = (idx + 1) / total
-            bar = "█" * int(20 * percent) + "-" * (20 - int(20 * percent))
-            print(f"\r處理進度: [{bar}] {int(percent * 100)}%", end="", flush=True)
+            if DEBUG:
+                # 暫時 - 更新進度條
+                percent = (idx + 1) / total
+                bar = "█" * int(20 * percent) + "-" * (20 - int(20 * percent))
+                print(f"\r處理進度: [{bar}] {int(percent * 100)}%", end="", flush=True)
 
         print()  # 4. 整個迴圈結束後換行        
 
         return re_export
 
     ## 匯出
-    def export(self, report : PresidentESIReport, re_export: ReportExporter):
+    def export(self, report : PresidentESIReport, re_export: ReportExporter) -> str:
         print("準備匯出檔案....")
         # 匯出
         now = datetime.now().strftime("%y-%m-%d %H%M%S")
@@ -629,6 +631,7 @@ class PresidentAnalysis(Anaysis):
             raise PRISError("沒有選擇資料夾")
 
         re_export.export(output_path)
+        return output_path
 
 
     def generate_report(self, item : PresidentESIReportItem, sheet_name : str) -> tuple[Template, list[list[str]]] :
@@ -687,8 +690,8 @@ class PresidentAnalysis(Anaysis):
                 item["Count_MainVer"],
                 item["WorldRank_MainVer"],
                 item["AsiaRank_MainVer"],
-                PresidentAnalysis.try_diff(item["WorldRank_CompVer"],item["WorldRank_MainVer"]),
-                PresidentAnalysis.try_diff(item["AsiaRank_CompVer"],item["AsiaRank_MainVer"])
+                PresidentESIAnalysis.try_diff(item["WorldRank_CompVer"],item["WorldRank_MainVer"]),
+                PresidentESIAnalysis.try_diff(item["AsiaRank_CompVer"],item["AsiaRank_MainVer"])
             ])
 
         return res
@@ -719,8 +722,8 @@ class PresidentAnalysis(Anaysis):
                 item["Cited_MainVer"],
                 item["WorldRank_MainVer"],
                 item["AsiaRank_MainVer"],
-                PresidentAnalysis.try_diff(item["WorldRank_CompVer"],item["WorldRank_MainVer"]),
-                PresidentAnalysis.try_diff(item["AsiaRank_CompVer"],item["AsiaRank_MainVer"])
+                PresidentESIAnalysis.try_diff(item["WorldRank_CompVer"],item["WorldRank_MainVer"]),
+                PresidentESIAnalysis.try_diff(item["AsiaRank_CompVer"],item["AsiaRank_MainVer"])
             ])
 
         return res
@@ -749,7 +752,7 @@ class PresidentAnalysis(Anaysis):
                 item["Rank_CompVer"],
                 item["AvgCited_MainVer"],
                 item["Rank_MainVer"],
-                PresidentAnalysis.try_diff(item["Rank_CompVer"],item["Rank_MainVer"])
+                PresidentESIAnalysis.try_diff(item["Rank_CompVer"],item["Rank_MainVer"])
             ])
 
         return res
@@ -774,11 +777,11 @@ class PresidentAnalysis(Anaysis):
                 item["NameEN"], 
                 item["PaperCount_CompVer"], 
                 item["HiCi_CompVer"],
-                PresidentAnalysis.get_ratio(item["PaperCount_CompVer"], item["HiCi_CompVer"]),
+                PresidentESIAnalysis.get_ratio(item["PaperCount_CompVer"], item["HiCi_CompVer"]),
                 item["PaperCount_MainVer"],
                 item["HiCi_MainVer"],
-                PresidentAnalysis.get_ratio(item["PaperCount_MainVer"], item["HiCi_MainVer"]),
-                PresidentAnalysis.get_growth_rate(item["HiCi_CompVer"],item["HiCi_MainVer"])
+                PresidentESIAnalysis.get_ratio(item["PaperCount_MainVer"], item["HiCi_MainVer"]),
+                PresidentESIAnalysis.get_growth_rate(item["HiCi_CompVer"],item["HiCi_MainVer"])
             ])
 
         return res
@@ -816,8 +819,8 @@ class PresidentAnalysis(Anaysis):
                     world_rank_comp_ver = try_get(world_rank_by_sub_fields, org_info.org_serial, self.comp_ver_short, sub_field_id)
                     asia_pacific_rank_main_ver = try_get(asia_pacific_rank_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
                     asia_pacific_rank_comp_ver = try_get(asia_pacific_rank_by_sub_fields, org_info.org_serial, self.comp_ver_short, sub_field_id)
-                    world_rank_prog = PresidentAnalysis.try_diff(world_rank_comp_ver, world_rank_main_ver)
-                    asia_pacific_prog = PresidentAnalysis.try_diff(asia_pacific_rank_comp_ver, asia_pacific_rank_main_ver)
+                    world_rank_prog = PresidentESIAnalysis.try_diff(world_rank_comp_ver, world_rank_main_ver)
+                    asia_pacific_prog = PresidentESIAnalysis.try_diff(asia_pacific_rank_comp_ver, asia_pacific_rank_main_ver)
 
                     row += [count,world_rank_main_ver,world_rank_prog,asia_pacific_rank_main_ver,asia_pacific_prog]
             res.append(row)
@@ -847,7 +850,7 @@ class PresidentAnalysis(Anaysis):
                     count = try_get(self.paper_count_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
                     rank_main_ver = try_get(rank,org_info.org_serial, self.main_ver_short, sub_field_id)
                     rank_comp_ver = try_get(rank,org_info.org_serial, self.comp_ver_short, sub_field_id)
-                    rank_prog = PresidentAnalysis.try_diff(rank_comp_ver,rank_main_ver)
+                    rank_prog = PresidentESIAnalysis.try_diff(rank_comp_ver,rank_main_ver)
                     row += [count, rank_main_ver, rank_prog]
 
                     if count != "":
@@ -888,7 +891,7 @@ class PresidentAnalysis(Anaysis):
                     cited = try_get(self.cited_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
                     rank_main_ver = try_get(rank,org_info.org_serial, self.main_ver_short, sub_field_id)
                     rank_comp_ver = try_get(rank,org_info.org_serial, self.comp_ver_short, sub_field_id)
-                    rank_prog = PresidentAnalysis.try_diff(rank_comp_ver,rank_main_ver)
+                    rank_prog = PresidentESIAnalysis.try_diff(rank_comp_ver,rank_main_ver)
                     avg_cited = try_get(self.avg_cited_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
                     row += [cited, rank_main_ver, rank_prog, avg_cited]
 

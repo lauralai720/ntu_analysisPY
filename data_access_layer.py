@@ -33,7 +33,7 @@ class DataAccessLayer:
         if str(DLL_DIR) not in sys.path:
             sys.path.append(str(DLL_DIR))
 
-        clr.AddReference("System")  # 確保基礎 System 核心有被載入
+        #clr.AddReference("System")  # 確保基礎 System 核心有被載入
         clr.AddReference("System.Data")
         clr.AddReference("PRISUtilityKit")  # 依實際 DLL 檔名調整
 
@@ -41,6 +41,15 @@ class DataAccessLayer:
         
         self.JOINTYPE = DllJoinType
         self.OPTYPE = DllOpType
+
+    def to_csharp_list(self, py_list: list, dotnet_type):
+        """轉換成 .NET 的 List<T>(對應 C# 的 List<T>)"""
+        from System.Collections.Generic import List
+
+        dotnet_list = List[dotnet_type]()
+        for item in py_list:
+            dotnet_list.Add(item)
+        return dotnet_list
 
 
     def to_csharp_array(self, py_list: list):
@@ -109,7 +118,11 @@ class DataAccessLayer:
     #     """提供 Column 這個 DLL 型別,給需要建立/操作它的業務邏輯層使用"""
     #     from PRISUtilityKit.DBAL.Cls import Column
     #     return Column
-
+    def get_DB(self):
+        from PRISUtilityKit.DBAL.Cls import DB
+        Conn = DB.GetShareConnection()
+        return Conn
+    
     def create_column(self, *args, **kwargs):
         """更常見的做法:不直接暴露型別本身,而是提供『建立這個型別實例』的方法"""
         from PRISUtilityKit.DBAL.Cls import Column
@@ -130,12 +143,29 @@ class DataAccessLayer:
     def create_where_column(self, c1, op, c2):
         from PRISUtilityKit.DBAL.Cls import Where
         return Where.Column(c1, op, c2)
+    
     def create_where_column_to_const(self, c1, op, c2):
         from PRISUtilityKit.DBAL.Cls import Where
         return Where.ColumnToConst(c1, op, c2)
+    
     def create_where_null(self, c1, op,):
         from PRISUtilityKit.DBAL.Cls import Where
         return Where.Null(c1, op)
+    
+    def create_where_multiple(self,wlist,op):
+        from PRISUtilityKit.DBAL.Cls import Where
+        where_arr = self.to_csharp_array(wlist)
+        return Where.MultipleWhere(where_arr, op)
+    
+    def create_where_column_val_in_join_table_column_multiple(self, clist1,clist2,join_table,where = None, distinct:bool=False):
+        from PRISUtilityKit.DBAL.Cls import Where, Column
+        c1_list = self.to_csharp_list(clist1, Column)
+        c2_list = self.to_csharp_list(clist2, Column)
+        return Where.ColumnValInJoinTableColumnMultiple(c1_list, c2_list, join_table, where, distinct)
+    
+    def create_where_operated_column_to_const(self, c, op1, v1, op2, v2):
+        from PRISUtilityKit.DBAL.Cls import Where
+        return Where.OperatedColumnToConst(c, op1, v1, op2, v2)
     
     def create_query(self, *args, **kwargs):
         from PRISUtilityKit.DBAL.Cls import Query
@@ -153,6 +183,21 @@ class DataAccessLayer:
         from PRISUtilityKit.DBAL.Cls import Bind
         return Bind(*args, **kwargs)
 
+    def create_extra_column_table(self, *args, **kwargs):
+        from PRISUtilityKit.DBAL.Cls import ExtraColumnTable
+        return ExtraColumnTable(*args, **kwargs)
+
+    def create_extra_column_table(self, *args, **kwargs):
+        from PRISUtilityKit.DBAL.Cls import ExtraColumnTable
+        return ExtraColumnTable(*args, **kwargs)
+    
+    def create_year_subject(self, *args, **kwargs):
+        from PRISUtilityKit.DBAL.Cls import YearSubject
+        return YearSubject(*args, **kwargs)
+
+    def create_year_table(self, *args, **kwargs):
+        from PRISUtilityKit.DBAL.Cls import YTable
+        return YTable(*args, **kwargs)
     # ------------------------------------------------------------------
     # 對外提供的方法(業務邏輯層只呼叫這一層,不要自己碰 DLL)
     # ------------------------------------------------------------------
@@ -188,14 +233,18 @@ class DataAccessLayer:
         Conn = DB.GetShareConnection()
         conn_ref = [Conn]  
         dt = SQLExecute.DoQuery(cmd, conn_ref[0])
-        # conn_ref = clr.Reference[SqlConnection](Conn)
-        # dt = SQLExecute.DoQuery(cmd, conn_ref)
 
         return dt
+    
+    def do_no_query(self, cmd:str):
+        from PRISUtilityKit.DBAL.Cls import DB,SQLExecute  # 依實際 namespace/method 調整
+        Conn = DB.GetShareConnection()
+        conn_ref = [Conn]  
+        SQLExecute.DoNonQuery(cmd, conn_ref[0])
 
     def query_pd(self, cmd:str, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
         dt = self.query(cmd)
-        return self._datatable_to_dataframe(dt, dtype_map)
+        return self.datatable_to_dataframe(dt, dtype_map)
 
 
     def a02_sumup_calculate(self, dt : "DataTable", dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
@@ -203,21 +252,37 @@ class DataAccessLayer:
         from PRISUtilityKit.DBAL.Module import A02_SumUp
 
         dt = A02_SumUp.Calculate(dt)
-        return self._datatable_to_dataframe(dt, dtype_map)
+        return self.datatable_to_dataframe(dt, dtype_map)
 
     # 實驗，原本是要傳c# 的 DataTable，先改用pd.DataFrame，在這邊轉成DataTable
     def b22_ranking_calculate(self, df : pd.DataFrame, analysis_idx:int = 0, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
         from PRISUtilityKit.DBAL.Module import B22_Ranking
         dt = self._dataframe_to_datatable(df = df)
         dt = B22_Ranking.Calculate(dt, analysis_idx)
-        return self._datatable_to_dataframe(dt, dtype_map)
+        return self.datatable_to_dataframe(dt, dtype_map)
 
-    def a08_cntavg_calculate(self, df : pd.DataFrame, decimals:int, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
+    def a08_cntavg_calculate(self, df : pd.DataFrame, decimals:int = -1, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
         from PRISUtilityKit.DBAL.Module import A08_CntAvg
         dt = self._dataframe_to_datatable(df = df)
         dt = A08_CntAvg.Calculate(dt, decimals)
-        return self._datatable_to_dataframe(dt, dtype_map)
-    
+        return self.datatable_to_dataframe(dt, dtype_map)
+
+    def a08_cntavg_calculate_join(self, df_1 : pd.DataFrame,df_2 : pd.DataFrame, decimals:int = -1, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
+        from PRISUtilityKit.DBAL.Module import A08_CntAvg
+        from PRISUtilityKit.DBAL.Lib import Utils
+        dt_1 = self._dataframe_to_datatable(df = df_1)
+        dt_2 = self._dataframe_to_datatable(df = df_2)
+        dt = A08_CntAvg.Calculate(Utils.Join(dt_1, dt_2), decimals)
+        return self.datatable_to_dataframe(dt, dtype_map)
+
+    def growth_rate_calculate(self, df : pd.DataFrame, year_idx:int, ori_years : list[str], per_year_func, use_percentage: bool = True, na_val_notation=None) -> pd.DataFrame:
+        from PRISUtilityKit.DBAL.Module import GrowthRate
+        from System import Func
+        dt = self._dataframe_to_datatable(df = df)
+        ori_years_cs = self.to_csharp_list(ori_years, str)
+        per_year_func_cs = Func[str, str](per_year_func)
+        dt = GrowthRate.Calculate(dt, year_idx, ori_years_cs, per_year_func_cs, use_percentage, na_val_notation)
+        return self.datatable_to_dataframe(dt)
     # ------------------------------------------------------------------
     # 一些靜態的轉換方法，但有可能用到dll的型別
     # ------------------------------------------------------------------
@@ -292,7 +357,7 @@ class DataAccessLayer:
         df = pd.DataFrame(data_rows, columns=header)
         return self._apply_dtypes(df, dtype_map)
 
-    def _datatable_to_dataframe(self, dt, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
+    def datatable_to_dataframe(self, dt, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
         if dt is None:
             return pd.DataFrame()
 

@@ -10,7 +10,7 @@ from datetime import datetime
 import common.db_schema as db_schema
 from components.subjects import Subjects
 from dal_provider import get_dal
-from components.esi_year import ESIYear
+from components.year_selector import ESIYear
 from common.util import DataTableFormatter
 
 dal = get_dal()
@@ -125,11 +125,11 @@ class ComputeObject:
     ## 原 : public DataTable Count(bool RemoveSubjColumn = false, Column[] OrderBy = null, string CountFunc = "COUNT")
     def to_count(self, remove_subj_col : bool = False, orderby : list["Column"] = None, count_func = "COUNT"):
         return self.query.Count(
-            self.MainColumn, 
-            Distinct= self.Distinct, 
-            KeepColumn = self.KeepColumn, 
+            self.main_column, 
+            Distinct= self.distinct, 
+            KeepColumn = self.keep_column, 
             OrderBy= orderby, 
-            Wheres= self.WhereClauses, 
+            Wheres= self.where_clauses, 
             RemoveSubjColumn= remove_subj_col, 
             CountFunc= count_func
         )
@@ -177,6 +177,10 @@ class Metrics(ABC):
 
     get_where_clauses: Callable[["Table"], list["Where"]] = None
 
+    def main_paper_count(self) -> pd.DataFrame:
+        res_dt = self.get_count(db_schema.schema.MainBindColumnName)
+        return dal.datatable_to_dataframe(res_dt)
+
     def get_main_table_and_bind_col(self) -> tuple["Table", "Column"]:
         #dal = get_dal()
         main_table = dal.create_table(db_schema.schema.MainTableName)
@@ -204,9 +208,50 @@ class Metrics(ABC):
             bind_year=self.bind_year,
         )
 
+    def get_compute_object_with_join_table(self, main_col_name:str, join_table_name:str, join_column_name:str, join_main_table_column_name:str, main_column_concat : list[str] | None = None, main_column_in_main_table : bool= False, join_type = dal.JOINTYPE.InnerJoin, dist:bool = True, func :str = ""):
+        (main_table, bind_column) = self.get_main_table_and_bind_col()
+        join_main_col = main_table.RetrieveColumn(join_main_table_column_name)
+        table2 = dal.create_table(join_table_name)
+        join_col = table2.RetrieveColumn(join_column_name)
+
+        main_col_table = None
+        main_col = None
+        if main_column_in_main_table:
+            main_col_table = main_table
+        else:
+            main_col_table = table2
+
+        if main_column_concat:
+            main_col = main_col_table.RetrieveColumn(main_col_name, Concat = main_column_concat)
+        else:
+            main_col = main_col_table.RetrieveColumn(main_col_name, Func = func)
+        
+
+        on = dal.create_join_on(join_main_col, join_col)
+        join_table = dal.create_join_table(main_table, table2, join_type, on, Collate= "DATABASE_DEFAULT")
+        
+        return ComputeObject(
+            subjects = self.subjects,
+            main_table= main_table,
+            join_table= join_table,
+            bind_column= bind_column,
+            main_column= main_col,
+            where_clauses= self.get_where_clauses(main_table),             
+            distinct= dist,
+            bind_subject1= self.bind_subject1,
+            bind_subject2= self.bind_subject2,
+            bind_year= self.bind_year
+        )
+        
+
     def get_list(self, main_col_name: str, dist: bool = True):
         return self.get_compute_object(main_col_name, dist).to_list()
 
+    def get_count(self, main_col_name:str, dist: bool = True, count_func="COUNT"):
+        return self.get_compute_object(main_col_name, dist).to_count(count_func = count_func)
+
+
+    
     
 # ESIMetrics
 @dataclass
@@ -629,3 +674,116 @@ class ESIMetrics(Metrics):
             return rank_list[head].rank
         else:
             return rank_list[head].rank+1
+
+@dataclass
+class PaperMetrics(Metrics):
+    @cached_property
+    def cited(self) -> pd.DataFrame:
+        compute_object = self.get_compute_object_with_join_table(db_schema.schema.MainBindColumnName, db_schema.schema.CitationsCountTableName, db_schema.schema.MainBindColumnName, db_schema.schema.MainBindColumnName, dist=True)
+        col_cited_count = compute_object.get_joined_right_table().RetrieveColumn(db_schema.schema.CitedCountColumnName)
+        compute_object.add_keep_col(col_cited_count)
+        dt_ret = compute_object.to_list()
+        dt_ret.Columns.RemoveAt(dt_ret.Columns.Count - 2)
+        return dal.a02_sumup_calculate(dt_ret)
+
+@dataclass
+class PatentMetrics(Metrics):
+    @cached_property
+    def cited(self) -> pd.DataFrame:
+        compute_object = self.get_compute_object_with_join_table(db_schema.schema.ReferColumnName, db_schema.schema.RefTableName, db_schema.schema.CitedColumnName, db_schema.schema.MainBindColumnName,join_type= dal.JOINTYPE.InnerJoin, dist=False)
+        ref_country_col = compute_object.get_joined_right_table().RetrieveColumn(db_schema.schema.RefCountryColumnName)
+        where_clause = dal.create_where_column_to_const(ref_country_col, dal.OPTYPE.Equal, "US")
+        compute_object.add_where_clause(where_clause)
+        res = dal.datatable_to_dataframe(compute_object.to_count())
+        return res
+
+from common.year import Year
+
+@dataclass 
+class GrowthRate(Metrics):
+    _pre_year_list: list[Year] | None = None
+    ori_year_list: list[str] | None = None
+
+    @property
+    def pre_year_list(self) -> list[Year]:
+        if self._pre_year_list is None:
+            self._pre_year_list = self._get_pre_year_list()
+        return self._pre_year_list
+
+    def _already_in_list(self, year: Year, year_list: list[Year]) -> bool:
+        pre_y = year.add(-1)
+        return any(x == pre_y for x in year_list)
+
+    def _get_pre_year_list(self) -> list["Year"]:
+        pre_year_list: list["Year"] = []
+
+        for y in self.subjects.year_list:
+            if self._already_in_list(y, self.subjects.year_list):
+                continue
+            if self._already_in_list(y, pre_year_list):
+                continue
+
+            pre_year_list.append(y.add(-1))
+
+        return pre_year_list
+
+    def calculate_growth_rate(self, input_data, use_percentage: bool = True, na_val_notation=None) -> pd.DataFrame:
+        if self.subjects.subject1 is None:
+            y_idx = 0
+        elif self.subjects.subject2 is None:
+            y_idx = 1
+        else:
+            y_idx = 2
+
+        if self.ori_year_list is None:
+            self.ori_year_list = list(dict.fromkeys(str(x) for x in self.subjects.YearList))
+
+        def pre_y_func(x: str) -> str:
+            return str(Year(x).add(-1))
+
+        df_ret = dal.growth_rate_calculate(
+            input_data, y_idx, self.ori_year_list, pre_y_func, use_percentage, na_val_notation
+        )
+        return df_ret
+
+    def add_pre_year_list_to_year_subject(self):
+        self.ori_year_list = list(dict.fromkeys(str(x) for x in self.subjects.YearList))
+
+        for y in self.pre_year_list:
+            self.subjects.year.append(str(y))
+            self.subjects.YearList.append(y)
+
+@dataclass
+class PaperGrowthRateMetric(GrowthRate):
+    def paper(self, use_percent_age : bool = True, na_val_notation = None)-> pd.DataFrame:
+        return self.calculate_growth_rate(self.main_paper_count(), use_percentage=use_percent_age, na_val_notation=na_val_notation)
+
+@dataclass 
+class Indicator(Metrics):
+    @property
+    def list_metrics(self) -> Metrics:
+        return None
+    @property
+    def metrics(self) -> Metrics:
+        return None
+
+    def avg_cited(self, df_cited : pd.DataFrame = None) -> pd.DataFrame:
+        df_num = self.metrics.main_paper_count()
+        if not df_cited:
+            df_cited = self.metrics.cited
+        
+        subj_columns = [f"subj{i}" for i in range(self.subjects.subject_num)]
+        df_num.columns = subj_columns + ["Num"]
+        df_cited.columns = subj_columns + ["Cited"]
+
+        res = dal.a08_cntavg_calculate_join(df_cited, df_num)
+        res = res.drop(columns=["Num","Cited"])
+        return res
+
+@dataclass
+class PaperIndicator(Indicator):
+    @property
+    def metrics(self) -> PaperMetrics:
+        return PaperMetrics(subjects=self.subjects,get_where_clauses=self.get_where_clauses)
+
+    

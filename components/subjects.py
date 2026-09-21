@@ -1,8 +1,8 @@
 from dataclasses import dataclass,field
 from typing import Optional
 
-from components.esi_year import ESIYear
-
+from components.year_selector import ESIYear
+from components.paper_org_value import PaperOrgSelectedValue
 
 @dataclass
 class Subjects:
@@ -18,12 +18,23 @@ class Subjects:
     Subject1Header : str = ""
     Subject2Header : str = ""
     YearHeader : str = ""
-    YearList : list[int] = field(default_factory=list)
+    YearList : list = field(default_factory=list)
     Subject1Type : str = ""
     Subject2Type : str = ""
     ShownByESI_ID: bool = False # ESIFieldSelectedValue.ShownByESI_ID
+    WOSselectedVal1 : PaperOrgSelectedValue = None
+    WOSselectedVal2 = None
 
-
+    @property
+    def subject_num(self) -> int:
+        num = 0
+        if self.subject1:
+            num = num +1
+        if self.subject2:
+            num = num +1
+        if self.year:
+            num = num +1
+        return num
 
 ## Copy一個新的Subjects物件
 ## 因為有dll裡的物件，所以不能用python的copy.deepcopy來進行複製
