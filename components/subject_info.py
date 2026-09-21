@@ -468,7 +468,6 @@ class WOSPaperOrgSubjectInfo:
                         restrict_org3 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, "TWU00000114%")
                         restrict_org = dal.create_where_multiple([restrict_org, restrict_org3], dal.OPTYPE.Or)
                     
-                    pass
                 else:
                     tblOrg.SetFullName(db_schema.schema.Org1stTableName)
                     restrict_org = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Equal, org_item.serial)
@@ -498,3 +497,71 @@ class WOSPaperOrgSubjectInfo:
         return f"{org.raw_serial}\x1c{org.org_name_ch}\x1c{org.org_name_en}"
 
 
+class PaperJcrIFSubjectInfo:
+    def has_value(self, selected_values: list[int] ) -> bool:
+        year, if_flag, if_from_flag, if_to_flag = selected_values
+        if year == -1 :
+            return False
+        if if_flag == -1 and (if_from_flag == -1 or if_to_flag == -1):
+            return False
+        return True
+    
+    # list[int]  = [year, IF, IFFrom, IFTo] 不另外建立 PaperJcrIFSelectedValue
+    def get_subject(self, selected_values: list[int] ) -> tuple["Subject", dict[str, "Column"]]:
+        if self.has_value(selected_values=selected_values) == False:
+            raise PRISError("IF value is not available")
+
+        from dal_provider import get_dal
+        dal = get_dal()
+
+        tbl_src = dal.create_table(db_schema.schema.WOSSourceTableName)
+        col_bind = tbl_src.RetrieveColumn(db_schema.schema.MainBindColumnName)
+        col_src_issn = tbl_src.RetrieveColumn(db_schema.schema.ISSNColumnName)
+        col_src_abb = tbl_src.RetrieveColumn(db_schema.schema.AbbColumnName)
+
+        tbl_jcr = dal.create_table(db_schema.schema.JcrTableName)
+        col_jcr_year = tbl_jcr.RetrieveColumn(db_schema.schema.YearColumnName)
+        col_jcr_issn = tbl_jcr.RetrieveColumn(db_schema.schema.ISSNColumnName)
+        col_jcr_abb = tbl_jcr.RetrieveColumn(db_schema.schema.JcrAbbTitleColumnName)
+        col_jcr_ifp = tbl_jcr.RetrieveColumn(db_schema.schema.JcrIFPercentColumnName)
+        col_jcr_if_rank = tbl_jcr.RetrieveColumn(db_schema.schema.JcrIFRankColumnName)
+
+        join_on = dal.create_join_on(col_src_issn, col_jcr_issn)
+
+        jtb = dal.create_join_table(tbl_src, tbl_jcr, dal.JOINTYPE.InnerJoin, join_on, Collate="Chinese_Taiwan_Stroke_CI_AS")
+        subj = dal.create_subject(jtb, col_bind)
+
+        subj.Initialize()
+
+        year, if_flag, if_from_flag, if_to_flag = selected_values
+
+        where_year = dal.create_where_column_to_const(col_jcr_year,dal.OPTYPE.Equal, str(year))
+        where_if = None
+        if if_flag != -1:
+            r = [
+                dal.create_where_column_to_const(col_jcr_ifp,dal.OPTYPE.LessThanEqual, str(if_flag)),
+                dal.create_where_column_to_const(col_jcr_if_rank,dal.OPTYPE.Equal, "1")
+            ]
+            where_if = dal.create_where_multiple(r, dal.OPTYPE.Or)
+        else:
+            r = [
+                dal.create_where_column_to_const(col_jcr_ifp,dal.OPTYPE.LessThanEqual, str(if_to_flag)),
+                dal.create_where_column_to_const(col_jcr_ifp,dal.OPTYPE.GreaterThanEqual, str(if_from_flag))
+            ]
+            where_if = dal.create_where_multiple(r, dal.OPTYPE.And)
+
+        where_clauses = [where_year, where_if]
+        where_clauses_arr = dal.to_csharp_array(where_clauses)
+        subj.AddAll(where_clauses_arr)
+
+        # (subj.Table as JoinTable).On = new JoinOn(colSrcAbb, colJcrAbb);
+        subj.Table.On = dal.create_join_on(col_src_abb, col_jcr_abb)
+
+        subj.AddAll(where_clauses_arr)
+        subj.DistinctTempTable()
+
+        res_dict = {
+            db_schema.schema.MainBindColumnName: col_bind
+        }
+
+        return subj, res_dict

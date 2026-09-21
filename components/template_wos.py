@@ -380,13 +380,10 @@ class S7(Template_WOS):
 
         headers = []
         serial_top = ExcelColumnHeader(name="機構編碼",  width=15)
-
         serial_name1_top=ExcelColumnHeader(name="機構名稱1", width=15)
-
         serial_name2_top=ExcelColumnHeader(name="機構名稱2", width=15)
         desc_header = ExcelColumnHeader(width=20)
-
-        
+     
         years = self.get_year_list()
         years_headers = []
         for y in years :
@@ -405,11 +402,10 @@ class S7(Template_WOS):
 
         report = self.get_report()
         report_rows : list[list[ECell]] = []
-        y_list = self.get_year_list()
-        y_total = len(self.get_year_list())
+
         for idx, rr in enumerate(self.rows):
             # 機構arr + year + 數值
-            whole_row = basic_rows[int(idx/y_total)] + [int(y_list[int(idx%y_total)])] + rr
+            whole_row = basic_rows[int(idx/3)] + [""] + rr
             rcells = self.get_cell_row(idx+1, whole_row)
             report_rows.append(rcells)
 
@@ -474,13 +470,15 @@ class S7(Template_WOS):
                         )
                     )
                 else:
-                    r_cells.append(
-                        ECell(
-                            text=prcent_str_format.format(self.get_cell_loc_str(r,origial_c),self.get_cell_loc_str(r,origial_c+1)),
-                            vertical_align=self.DefaultCellVerticalAlignment,
-                            horizontal_align=self.DefaultCellHorizontalAlignment
+                    if (origial_c % 2) == 1:
+                        r_cells.append(
+                            ECell(
+                                text=prcent_str_format.format(self.get_cell_loc_str(r,origial_c),self.get_cell_loc_str(r,origial_c+1)),
+                                vertical_align=self.DefaultCellVerticalAlignment,
+                                horizontal_align=self.DefaultCellHorizontalAlignment
+                            )
                         )
-                    )
+                    
             c+=1
             
         return r_cells   

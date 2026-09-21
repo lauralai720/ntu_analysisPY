@@ -16,6 +16,7 @@ from components.year_selector import WOSYearSelector
 from components.template import *
 from components.template_wos import *
 from components.paper_org_value import AuthorIndex
+from components.subject_info import GetSubject, PaperJcrIFSubjectInfo
 from export.report_exporter import *
 from export.output_tab import *
 from analysis.metrics import *
@@ -35,6 +36,7 @@ TemplateNameMapping = {
     TemplateType.S8 : "H指數",
     TemplateType.S9 : ["三年論文成長率","三年論文成長率"],
 }
+
 
 ORG_MAP: TypeAlias = dict[str, dict[str, float]]
 YEAR_MAP: TypeAlias = dict[str, float]
@@ -77,11 +79,19 @@ class PresidentWOSAnalysis(Anaysis):
         self._scie_growth_rate = ResettableLazy(self._fetch_scie_growth_rate)
         self._ssci_growth_rate = ResettableLazy(self._fetch_ssci_growth_rate)
         self._ahci_growth_rate = ResettableLazy(self._fetch_ahci_growth_rate)
+        self._if15_paper_count = ResettableLazy(self._fetch_if15_paper_count)
+        self._if40_paper_count = ResettableLazy(self._fetch_if40_paper_count)
 
     @cached_property
     def orgs(self) -> list[str] :
         #return list(dict.fromkeys(self.subjects.subject1.SubjVals))
         return list(dict.fromkeys(x.replace("''", "'") for x in self.subjects.subject1.SubjVals))
+
+    @cached_property
+    def latest_jrc_year(self) -> int:
+        _jcrVersions = self.get_jcr_version_list()
+        return max(_jcrVersions)
+    
     @property
     def years(self) -> list[str] :
         return self.subjects.year.SubjVals
@@ -130,7 +140,12 @@ class PresidentWOSAnalysis(Anaysis):
     @property
     def avg_cited(self) -> ORG_MAP:
         return self._avg_cited.value
-
+    @property
+    def if15_paper_count(self) -> ORG_MAP:
+        return self._if15_paper_count.value
+    @property
+    def if40_paper_count(self) -> ORG_MAP:
+        return self._if40_paper_count.value
     @property
     def paper_metrics(self) -> PaperMetrics:
         return PaperMetrics(subjects=self.subjects, get_where_clauses=self.get_where_clauses)
@@ -305,6 +320,46 @@ class PresidentWOSAnalysis(Anaysis):
 
         return res
     
+    def _fetch_if15_paper_count(self):
+        m = self.paper_metrics
+        if not db_schema.schema.PaperJrcSubjectInfo:
+            db_schema.schema.PaperJrcSubjectInfo = PaperJcrIFSubjectInfo()
+
+        selected_val = [self.latest_jrc_year, 0.15,-1,-1]
+        def get_where_clauses(tbl):
+            where = self.get_subject_where_clause(db_schema.schema.PaperJrcSubjectInfo, selected_val, tbl)
+            return [where]
+        m.get_where_clauses = get_where_clauses
+        df_if15_paper_count = m.main_paper_count()
+        res = self.get_orgmap_from_df(df_if15_paper_count)
+        return res
+
+    def _fetch_if40_paper_count(self):
+        m = self.paper_metrics
+        if not db_schema.schema.PaperJrcSubjectInfo:
+            db_schema.schema.PaperJrcSubjectInfo = PaperJcrIFSubjectInfo()
+
+        selected_val = [self.latest_jrc_year, 0.40,-1,-1]
+        def get_where_clauses(tbl):
+            where = self.get_subject_where_clause(db_schema.schema.PaperJrcSubjectInfo, selected_val, tbl)
+            return [where]
+        m.get_where_clauses = get_where_clauses
+        df_if15_paper_count = m.main_paper_count()
+        res = self.get_orgmap_from_df(df_if15_paper_count)
+        return res
+
+    def get_subject_where_clause(self, subj_info:GetSubject, selected_val : list, table:"Table"):
+        subj, subj_dict = subj_info.get_subject(selected_val)
+        selected_val = [-1,-1,-1,-1]
+        col_pn = table.GetColumn(db_schema.schema.MainBindColumnName)
+        where =dal.create_where_column_val_in_subject(col_pn, dal.OPTYPE.In, subj, subj_dict[db_schema.schema.MainBindColumnName])
+        return where
+
+    def get_jcr_version_list(self):
+        cmd_str = f"SELECT DISTINCT {db_schema.schema.YearColumnName} FROM {db_schema.schema.JcrTableName}"
+        query_res = dal.query_2d_raw(cmd_str)
+        return [x[0] for x in query_res]
+
 
     
     def run(self, report : PresidentWOSReport) -> ReportExporter:
@@ -593,11 +648,13 @@ class PresidentWOSAnalysis(Anaysis):
                 if if40_paper_count_per_year:
                     if40_cnt = if40_paper_count_per_year.get(y, 0)
 
-                cnt_list.append(cnt)
+                cnt_list.append(str(cnt))
                 if cnt == 0 :
-                    if15_cnt_list.append(0,0)
-                    if40_cnt_list.append(0,0)
-                #temp_rows.append([str(v) for v in val_list])
+                    if15_cnt_list.extend(["0","0"])
+                    if40_cnt_list.extend(["0","0"])
+                else:
+                    if15_cnt_list.extend([str(if15_cnt), str(if15_cnt/cnt)])
+                    if40_cnt_list.extend([str(if40_cnt), str(if40_cnt/cnt)])
 
             temp_rows.append(cnt_list)
             temp_rows.append(if15_cnt_list)

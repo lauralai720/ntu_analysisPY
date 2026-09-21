@@ -166,7 +166,11 @@ class DataAccessLayer:
     def create_where_operated_column_to_const(self, c, op1, v1, op2, v2):
         from PRISUtilityKit.DBAL.Cls import Where
         return Where.OperatedColumnToConst(c, op1, v1, op2, v2)
-    
+        
+    def create_where_column_val_in_subject(self,c1, op, s, c2):
+        from PRISUtilityKit.DBAL.Cls import Where
+        return Where.ColumnValInSubject(c1, op, s, c2)
+
     def create_query(self, *args, **kwargs):
         from PRISUtilityKit.DBAL.Cls import Query
         return Query(*args, **kwargs)

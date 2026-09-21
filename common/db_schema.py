@@ -114,6 +114,7 @@ class WOSSchema(DBSchema):
     TitleNameColumnName = "Title"
 
     WOSOrgSubjectInfo = None
+    PaperJrcSubjectInfo = None
 
     @classmethod
     def set_DB_name(cls, name:str): 
