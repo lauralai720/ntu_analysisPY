@@ -14,6 +14,7 @@ from analysis.analysis_type import AnalysisItemType
 from components.year_selector import YearSelector, ESIYearSelector,ESIYearStyle, WOSYearSelector
 from components.subject_info import *
 import common.db_schema as db_schema
+import common.util as Util
 from exceptions import PRISError
 
 
@@ -269,7 +270,7 @@ def create_wos_report(file_name:str, template_types : list[int], target_name:str
 
 
 ## template_types S1~S8
-def run_president_wos_report(db_name: str, file_name:str, template_types : list[int], org_ids: list[str], year_list:list[str], target_name:str, year_format:str, source_name:str, output_path: str = "./output/") -> str:
+def run_president_wos_report(db_name: str, file_name:str, template_types : list[int], org_ids: list[str], year_list:list[str], target:int, year_format:str, source_name:str, output_path: str = "./output/") -> str:
     db_schema.schema = db_schema.WOSSchema()
     db_schema.schema.set_DB_name(db_name)
     rprint(f"[green]設定DB名稱 : {db_schema.schema.DBName}[/green]")
@@ -278,6 +279,15 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
     if org_ids is not None:
         print(f"輸入機構數量 : {len(org_ids)}")
 
+    wos_target = WOSTarget(int(target))
+    ## check Sheet標題
+    if wos_target not in TargetSheetHeader:
+        raise PRISError("找不到Sheet標題.")
+
+    target_name = TargetSheetHeader[wos_target]
+    if wos_target == WOSTarget.Internal : 
+        target_name = target_name.format(Util.get_num_ch(len(org_ids)))
+    
     ## 年份
     year_selector = WOSYearSelector()
     year_selector.year_list = year_list
@@ -285,6 +295,7 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
     Template_WOS.set_year_list(year_list)
 
     years = [int(x) for x in year_list if x]
+
     ## 報表
     report = create_wos_report(file_name, template_types, target_name, year_format, source_name, min(years), max(years))
     report.output_path = output_path

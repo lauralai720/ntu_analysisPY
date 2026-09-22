@@ -12,6 +12,7 @@ from collections import defaultdict
 from dal_provider import get_dal
 
 import common.db_schema as db_schema
+import common.util as Util
 from components.subjects import Subjects
 from components.template import *
 from components.template_esi import *
@@ -146,17 +147,7 @@ class PresidentESIReportItem:
     def get_num_ch(self,i) -> str:
         if (i <=0 or i >= 100):
             raise PRISError(f"表單Index數值不正確，{i}，正確範圍1~99")
-        ret = ""
-        if (i>9):
-            if (i<20):
-                ret += "十"
-            else:
-                ret += f"{self.numCHArr[(i // 10) - 1]}十"
-
-        if (i % 10 != 0):
-            ret += f"{self.numCHArr[(i % 10) - 1]}"
-
-        return ret
+        return Util.get_num_ch(i)
 
 @dataclass
 class Anaysis:

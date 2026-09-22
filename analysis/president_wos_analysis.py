@@ -24,6 +24,12 @@ from components.esi_field import *
 from exceptions import PRISError
 from analysis.president_esi_analysis import Anaysis,ResettableLazy
 
+class WOSTarget(Enum):
+    Internal = 1
+    NTUCollege = 2
+    NTUCollegeAndDepartment = 3
+    AsiaPacific = 4
+
 ## [ TabName(分頁標題), SheetName(表格標題)]，非list的就是一樣的
 TemplateNameMapping = {
     TemplateType.S1 : ["歷年上半年論文數統計","論文數統計"],
@@ -33,8 +39,16 @@ TemplateNameMapping = {
     TemplateType.S5 : "平均被引用次數統計",
     TemplateType.S6 : "論文數及成長率",
     TemplateType.S7 : "高影響期刊係數前15%及40%論文數",
-    TemplateType.S8 : "H指數",
+    TemplateType.S8 : "H指數", # 暫時不做
     TemplateType.S9 : ["三年論文成長率","三年論文成長率"],
+}
+
+
+TargetSheetHeader = {
+    WOSTarget.Internal : "國內{0}所研究型大學",
+    WOSTarget.NTUCollege: "臺灣大學各學院",
+    WOSTarget.NTUCollegeAndDepartment : "臺灣大學x各學院系所",
+    WOSTarget.AsiaPacific : "亞太代表性大學"
 }
 
 
@@ -64,7 +78,6 @@ class PresidentWOSAnalysis(Anaysis):
     max_year : str = ""
 
     def __post_init__(self):
-
         self._paper_count = ResettableLazy(self._fetch_paper_count)
         self._first_or_reprint_author_paper_count = ResettableLazy(self._fetch_first_or_reprint_author_paper_count)
         self._cited_count = ResettableLazy(self._fetch_cited_count)
@@ -84,7 +97,6 @@ class PresidentWOSAnalysis(Anaysis):
 
     @cached_property
     def orgs(self) -> list[str] :
-        #return list(dict.fromkeys(self.subjects.subject1.SubjVals))
         return list(dict.fromkeys(x.replace("''", "'") for x in self.subjects.subject1.SubjVals))
 
     @cached_property
@@ -123,6 +135,7 @@ class PresidentWOSAnalysis(Anaysis):
     def cited_count(self) -> ORG_MAP:
         return self._cited_count.value
     @property
+    
     def growth_rate(self) -> ORG_MAP:
         return self._growth_rate.value
     @property

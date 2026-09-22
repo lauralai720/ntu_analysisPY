@@ -179,3 +179,20 @@ def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int 
         start_y = start_y+1
 
     return select_years
+
+
+num_ch_list = ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
+def get_num_ch(i) -> str:
+    if (i <=0 or i >= 100):
+        return "N"
+    ret = ""
+    if (i>9):
+        if (i<20):
+            ret += "十"
+        else:
+            ret += f"{num_ch_list[(i // 10) - 1]}十"
+
+    if (i % 10 != 0):
+        ret += f"{num_ch_list[(i % 10) - 1]}"
+
+    return ret
