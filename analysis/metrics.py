@@ -249,8 +249,6 @@ class Metrics(ABC):
 
     def get_count(self, main_col_name:str, dist: bool = True, count_func="COUNT"):
         return self.get_compute_object(main_col_name, dist).to_count(count_func = count_func)
-
-
     
     
 # ESIMetrics
@@ -263,7 +261,6 @@ class RankItem:
 class OrgAttrInfoItem:
     country:str
     continent:str
-
 
 
 VERSION_FIELD_RANK: TypeAlias = dict[str, dict[str, list[RankItem]]]

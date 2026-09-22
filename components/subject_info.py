@@ -465,7 +465,7 @@ class WOSPaperOrgSubjectInfo:
                 if isinstance(org_item, PaperOrg2ndItem):
                     tblOrg.SetFullName(db_schema.schema.Org2ndTableName)
                     restrict_org = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, org_item.query_var)
-                    # 處理合併的部分
+                    #
                     if org_item.query_var in concat_list:
                         for concat_org_serial in concat_list[org_item.query_var]:
                             restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, concat_org_serial)

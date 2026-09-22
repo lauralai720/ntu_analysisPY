@@ -135,7 +135,6 @@ class PresidentWOSAnalysis(Anaysis):
     def cited_count(self) -> ORG_MAP:
         return self._cited_count.value
     @property
-    
     def growth_rate(self) -> ORG_MAP:
         return self._growth_rate.value
     @property
@@ -443,223 +442,134 @@ class PresidentWOSAnalysis(Anaysis):
         }
 
         if template_type not in builders:
-            # raise ValueError(f"未知的 type:{template_type}")
-            #print(f"未知的 type:{template_type}")
             raise PRISError(f"未知的TemplateType:{template_type}")
-            #return tmpl, temp_rows
 
         tmpl, (temp_rows, basic_rows)= builders[template_type]()
         return tmpl, temp_rows, basic_rows
 
-    def get_s1_rows(self):
+    def _split_orgs(self, org:str) -> list[tuple[str, str, str]]:
+        """共用的前置處理:拆解 org 字串,回傳 (org_serial, name1, name2) 的清單"""
+        splited_org = org.split("\x1c")
+        return (splited_org[0], splited_org[1], splited_org[2])
+        
+
+    def _build_rows(self, compute_func) -> tuple[list, list]:
+        """
+        共用的組裝流程,compute_func 是每個 sN 專屬的計算邏輯,
+        接收 (org_serial, name1, name2),回傳這筆資料的 temp_row(如果有)。
+        """
         temp_rows = []
         basic_rows = []
+
         for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-              
-            org_paper_count = self.paper_count.get(org)
-            growth_rate_per_year = self.growth_rate_without_year.get(org)
+            org_serial, name1, name2 = self._split_orgs(org)
+            compute_func(org, temp_rows)
+            
+            basic_rows.append([org_serial, name1, name2])
+
+        return temp_rows, basic_rows
+
+    def get_s1_rows(self):   
+        def compute(org:str, temp_rows:list):
+            org_paper_count = self.paper_count.get(org,{})
+            growth_rate_per_year = self.growth_rate_without_year.get(org,{})
             res_org_val = []
             for y in self.years:
-                cnt : float | None = None
-                gr : float | None = None
-                if org_paper_count:
-                    cnt = org_paper_count.get(y)
-                if growth_rate_per_year:
-                    gr = growth_rate_per_year.get(y)
+                cnt = org_paper_count.get(y, 0)
+                gr = growth_rate_per_year.get(y, "")
+                res_org_val.extend([str(cnt),str(gr)])
 
-                res_cnt = cnt if cnt is not None else 0        
-                res_org_val.extend([str(res_cnt),str(gr if gr is not None else "")])
-
-            temp_rows.append(res_org_val)
-            basic_rows.append([org_serial, name1, name2])
-        return temp_rows, basic_rows    
+            temp_rows.append(res_org_val)  # 直接新增到傳進來的 temp_rows
+        return self._build_rows(compute)
 
     def get_s2_rows(self):
-        temp_rows = []
-        basic_rows = []
-        for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-                
-            org_paper_count = self.paper_count.get(org)
-            first_or_reprint_author_paper_count_per_year = self.first_or_reprint_author_paper_count.get(org)
+        def compute(org:str, temp_rows:list):
+            org_paper_count = self.paper_count.get(org,{})
+            first_or_reprint_author_paper_count_per_year = self.first_or_reprint_author_paper_count.get(org,{})
             res_org_val = []
             for y in self.years:
-                cnt : float | None = None
-                first_or_reprint_author_cnt : float | None = None
-                if org_paper_count:
-                    cnt = org_paper_count.get(y)
-                if first_or_reprint_author_paper_count_per_year:
-                    first_or_reprint_author_cnt = first_or_reprint_author_paper_count_per_year.get(y)
+                cnt = org_paper_count.get(y, 0)
+                first_or_reprint_author_cnt = first_or_reprint_author_paper_count_per_year.get(y, 0)
 
-                res_cnt = cnt if cnt is not None else 0
-                res_first_cnt = first_or_reprint_author_cnt if first_or_reprint_author_cnt is not None else 0
-                proportion = 0 if res_cnt == 0 else res_first_cnt / res_cnt
-                res_org_val.extend([str(res_cnt),str(res_first_cnt),str(proportion)])
+                proportion = 0 if cnt == 0 else first_or_reprint_author_cnt / cnt
+                res_org_val.extend([str(cnt),str(first_or_reprint_author_cnt),str(proportion)])
 
             temp_rows.append(res_org_val)
-            basic_rows.append([org_serial, name1, name2])
-        
-        return temp_rows, basic_rows
+        return self._build_rows(compute)
+
 
     def get_s3_rows(self):
-        temp_rows = []
-        basic_rows = []
-        for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-
-            org_cited_count = self.cited_count.get(org)
-            first_or_reprint_author_cited_count_per_year = self.first_or_reprint_author_cited_count.get(org)
+        def compute(org:str, temp_rows:list):
+            org_cited_count = self.cited_count.get(org,{})
+            first_or_reprint_author_cited_count_per_year = self.first_or_reprint_author_cited_count.get(org,{})
             res_org_val = []
             for y in self.years:
-                cited : float | None = None
-                first_or_reprint_author_cited : float | None = None
-                if org_cited_count:
-                    cited = org_cited_count.get(y)
-                if first_or_reprint_author_cited_count_per_year:
-                    first_or_reprint_author_cited = first_or_reprint_author_cited_count_per_year.get(y)
+                cited = org_cited_count.get(y, 0)
+                first_or_reprint_author_cited = first_or_reprint_author_cited_count_per_year.get(y, 0)
 
-                res_cited = cited if cited is not None else 0
-                res_first_cited = first_or_reprint_author_cited if first_or_reprint_author_cited is not None else 0
-                proportion = 0 if res_cited == 0 else res_first_cited / res_cited
-                res_org_val.extend([str(res_cited),str(res_first_cited),str(proportion)])
+                proportion = 0 if cited == 0 else first_or_reprint_author_cited / cited
+                res_org_val.extend([str(cited),str(first_or_reprint_author_cited),str(proportion)])
 
             temp_rows.append(res_org_val)
-            basic_rows.append([org_serial, name1, name2])
-        
-        return temp_rows, basic_rows
+        return self._build_rows(compute)
+
     
     def get_s4_rows(self):
-        temp_rows = []
-        basic_rows = []
-        for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-
-            growth_rate_per_year = self.growth_rate.get(org)
+        def compute(org:str, temp_rows:list):
+            growth_rate_per_year = self.growth_rate.get(org,{})
             res_org_val = []
             for y in self.years:
-                gr :float | None = None
-                if growth_rate_per_year:
-                    gr = growth_rate_per_year.get(y)
-                
-                res_org_val.append(str(gr if gr is not None else ""))
-
+                gr = growth_rate_per_year.get(y,"")
+                res_org_val.append(str(gr))
             temp_rows.append(res_org_val)
-            basic_rows.append([org_serial, name1, name2])
-        return temp_rows, basic_rows
+
+        return self._build_rows(compute)
 
     def get_s5_rows(self):
-        temp_rows = []
-        basic_rows = []
-        for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-
-            org_avg_cited = self.avg_cited.get(org)
-            
+        def compute(org:str, temp_rows:list):
+            org_avg_cited = self.avg_cited.get(org,{})
             res_org_val = []
             for y in self.years:
-                ac : float | None = None
-                
-                if org_avg_cited:
-                    ac = org_avg_cited.get(y)
-
-                res_ac = ac if ac is not None else 0
-                
-                res_org_val.extend([str(res_ac)])
-
+                ac = org_avg_cited.get(y, 0)
+                res_org_val.extend([str(ac)])
             temp_rows.append(res_org_val)
-            basic_rows.append([org_serial, name1, name2])
-        
-        return temp_rows, basic_rows
+        return self._build_rows(compute)
 
     def get_s6_rows(self):
-        temp_rows = []
-        basic_rows = []
-        for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-
-            scie_paper_count_per_year = self.scie_paper_count.get(org)
-            ssci_paper_count_per_year = self.ssci_paper_count.get(org)
-            ahci_paper_count_per_year = self.ahci_paper_count.get(org)
-            scie_growth_rate_per_year = self.scie_growth_rate.get(org)
-            ssci_growth_rate_per_year = self.ssci_growth_rate.get(org)
-            ahci_growth_rate_per_year = self.ahci_growth_rate.get(org)
+        def compute(org:str, temp_rows:list):
+            scie_paper_count_per_year = self.scie_paper_count.get(org, {})
+            ssci_paper_count_per_year = self.ssci_paper_count.get(org, {})
+            ahci_paper_count_per_year = self.ahci_paper_count.get(org, {})
+            scie_growth_rate_per_year = self.scie_growth_rate.get(org, {})
+            ssci_growth_rate_per_year = self.ssci_growth_rate.get(org, {})
+            ahci_growth_rate_per_year = self.ahci_growth_rate.get(org, {})
             
-            #res_org_val = []
-            for y in self.years:
-                scie_cnt : float | None = None
-                ssci_cnt : float | None = None
-                ahci_cnt : float | None = None
-                scie_gr : float | None = None
-                ssci_gr : float | None = None
-                ahci_gr : float | None = None
-
-                if scie_paper_count_per_year:
-                    scie_cnt = scie_paper_count_per_year.get(y, 0)
-                if ssci_paper_count_per_year:
-                    ssci_cnt = ssci_paper_count_per_year.get(y, 0)
-                if ahci_paper_count_per_year:
-                    ahci_cnt = ahci_paper_count_per_year.get(y, 0)
-                if scie_growth_rate_per_year:
-                    scie_gr = scie_growth_rate_per_year.get(y ,"")
-                if ssci_growth_rate_per_year:
-                    ssci_gr = ssci_growth_rate_per_year.get(y ,"")
-                if ahci_growth_rate_per_year:
-                    ahci_gr = ahci_growth_rate_per_year.get(y ,"")       
+            for y in self.years:         
+                scie_cnt = scie_paper_count_per_year.get(y, 0)
+                ssci_cnt = ssci_paper_count_per_year.get(y, 0)
+                ahci_cnt = ahci_paper_count_per_year.get(y, 0)
+                scie_gr = scie_growth_rate_per_year.get(y ,"")
+                ssci_gr = ssci_growth_rate_per_year.get(y ,"")
+                ahci_gr = ahci_growth_rate_per_year.get(y ,"")       
                 val_list = [scie_cnt, scie_gr, ssci_cnt, ssci_gr, ahci_cnt, ahci_gr]
                 temp_rows.append([str(v) for v in val_list])
 
-            #temp_rows.append(res_org_val)
-            basic_rows.append([org_serial, name1, name2])
-        
-        return temp_rows, basic_rows
+        return self._build_rows(compute)
+
 
     def get_s7_rows(self):
-        temp_rows = []
-        basic_rows = []
-        for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-
-            paper_count_per_year = self.paper_count.get(org)
-            if15_paper_count_per_year = self.if15_paper_count.get(org)
-            if40_paper_count_per_year = self.if40_paper_count.get(org)
+        def compute(org:str, temp_rows:list):
+            paper_count_per_year = self.paper_count.get(org,{})
+            if15_paper_count_per_year = self.if15_paper_count.get(org,{})
+            if40_paper_count_per_year = self.if40_paper_count.get(org,{})
             
-            #res_org_val = []
             cnt_list = []
             if15_cnt_list = []
             if40_cnt_list = []
             for y in self.years:
-                cnt : float | None = None
-                if15_cnt : float | None = None
-                if40_cnt : float | None = None
-
-                if paper_count_per_year:
-                    cnt = paper_count_per_year.get(y, 0)
-                if if15_paper_count_per_year:
-                    if15_cnt = if15_paper_count_per_year.get(y, 0)
-                if if40_paper_count_per_year:
-                    if40_cnt = if40_paper_count_per_year.get(y, 0)
+                cnt = paper_count_per_year.get(y, 0)
+                if15_cnt = if15_paper_count_per_year.get(y, 0)
+                if40_cnt = if40_paper_count_per_year.get(y, 0)
 
                 cnt_list.append(str(cnt))
                 if cnt == 0 :
@@ -672,9 +582,8 @@ class PresidentWOSAnalysis(Anaysis):
             temp_rows.append(cnt_list)
             temp_rows.append(if15_cnt_list)
             temp_rows.append(if40_cnt_list)
-            basic_rows.append([org_serial, name1, name2])
-        
-        return temp_rows, basic_rows
+
+        return self._build_rows(compute)
 
     def reset_year_subject(self):
         select_years = get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
@@ -687,27 +596,16 @@ class PresidentWOSAnalysis(Anaysis):
         self.subjects.YearList = years
 
     def get_s9_rows(self):
+        # 將年份改成 3年，2年重複的形式(2020-2022、2021-2023...etc)
         self.reset_year_subject()
-        temp_rows = []
-        basic_rows = []
-        for org in self.orgs:
-            splited_org = org.split("\x1c")
-            org_serial = splited_org[0]
-            name1 = splited_org[1]
-            name2 = splited_org[2]
-
-            growth_rate_in_year = self.growth_rate_range_year.get(org)
+        def compute(org:str, temp_rows:list):
+            growth_rate_in_year = self.growth_rate_range_year.get(org,{})
             res_org_val = []
             for y in self.years:
-                gr :float | None = None
-                if growth_rate_in_year:
-                    gr = growth_rate_in_year.get(y)
-                
-                res_org_val.append(str(gr if gr is not None else ""))
-
+                gr = growth_rate_in_year.get(y,"")
+                res_org_val.append(str(gr))
             temp_rows.append(res_org_val)
-            basic_rows.append([org_serial, name1, name2])
-        return temp_rows, basic_rows
+        return self._build_rows(compute)
 
 
     @staticmethod
