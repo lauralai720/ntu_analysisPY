@@ -10,14 +10,6 @@ run_report(**kwargs):</br>
 呼叫參數請看底下的參數說明
 </br>
 
-**main.py測試用的呼叫方式**</br>
-
-*ESI報表*</br>
-python main.py --analysis-type 6 --output-path "../PRIS_OUTPUT//" --model-id 2 --main-version 2026-03-12 --compare-version 2025-03-13</br>
-</br>
-
-*WOS報表*</br>
-python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --db-name "PRIS_WOS_校長報表_202604_2015_2025_260423" --file-name "國內研究型大學" --templates 102 103 104 105 109 --years 2020 2021 2022 2023 2024 2025 --orgs "TWU000001" "TWU000091" "TWU000013" "TWU000002" "TWU000003" "TWU000007" "TWU000006" --year-format "x-y年" --source-name "SCI-E、SSCI、A&HCI"</br>
 </br>
 ```
 -- 若要使用main測試，請記得環境設定成prod
@@ -106,3 +98,14 @@ python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --d
     
     * source_name - 報表表格標題之一，表格標題顯示用，str
         - "SCI-E、SSCI、A&HCI" / "SCI-E" / "SSCI" / "A&HCI"
+
+</br>
+</br>
+**main.py測試用的呼叫方式**</br>
+
+*ESI報表*</br>
+python main.py --analysis-type 6 --output-path "../PRIS_OUTPUT//" --model-id 2 --main-version 2026-03-12 --compare-version 2025-03-13</br>
+</br>
+
+*WOS報表*</br>
+python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --db-name "PRIS_WOS_校長報表_202604_2015_2025_260423" --file-name "國內研究型大學" --templates 102 103 104 105 109 --years 2020 2021 2022 2023 2024 2025 --orgs "TWU000001" "TWU000091" "TWU000013" "TWU000002" "TWU000003" "TWU000007" "TWU000006" --year-format "x-y年" --source-name "SCI-E、SSCI、A&HCI"</br>
