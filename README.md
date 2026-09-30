@@ -6,16 +6,21 @@ Python 3.11.9
 **使用方式**</br>
 from pris import run_report </br>
 run_report(**kwargs):</br>
+</br>
 呼叫參數請看底下的參數說明
-
+</br>
 main.py測試用的呼叫方式</br>
+ESI報表</br>
 python main.py --analysis-type 6 --output-path "../PRIS_OUTPUT//" --model-id 2 --main-version 2026-03-12 --compare-version 2025-03-13</br>
+</br>
+WOS報表</br>
 python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --db-name "PRIS_WOS_校長報表_202604_2015_2025_260423" --file-name "國內研究型大學" --templates 102 103 104 105 109 --years 2020 2021 2022 2023 2024 2025 --orgs "TWU000001" "TWU000091" "TWU000013" "TWU000002" "TWU000003" "TWU000007" "TWU000006" --year-format "x-y年" --source-name "SCI-E、SSCI、A&HCI"</br>
+</br>
 ```
 -- 若要使用main測試，請記得環境設定成prod
 -- $env:APP_ENV="prod"
 ```
-
+</br>
 **參數說明**
 - 通用參數
     * analysis_type - 分析項目
@@ -28,8 +33,15 @@ python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --d
         
     * output_path - 匯出資料夾路徑
 
-- 校長報表(ESI)
-    example : kwargs = {"analysis_type" = 6, "output_path"="XXXX", "model_id" = 1, "main_version" = "2026-03-12", "compare_version"="2025-03-13"}</br>
+- 校長報表(ESI)</br>
+    example : </br>
+        kwargs = {</br>
+            "analysis_type" = 6, </br>
+            "output_path"="XXXX", </br>
+            "model_id" = 1, </br>
+            "main_version" = "2026-03-12", </br>
+            "compare_version"="2025-03-13"</br>
+        }</br>
 
     * model_id - 模組，int
         - 6 - 校長報表(ESI)
@@ -43,16 +55,18 @@ python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --d
         - 格式 : yyyy-mm-dd
 
 
-- 校長報表(WOS)
-    example : kwargs = {"analysis_type"=6, "output_path"="XXXX", 
-            "db_name":"PRIS_WOS_校長報表_202604_2015_2025_260423",
-            "file_name": "台大院系級",
-            "template_types":[102,103],
-            "org_ids" : ["TWU000001","TWU000091","TWU000013","TWU000002","TWU000003","TWU000007"],
-            "year_list" : ["2020", "2021","2022","2023","2024", "2025"],
-            "target" : 2,
-            "year_format": "x-y年",
-            "source_name": "SCI-E、SSCI、A&HCI"
+- 校長報表(WOS)</br>
+    example : </br>
+        kwargs = {</br>
+            "analysis_type"=6, "output_path"="XXXX", </br>
+            "db_name":"PRIS_WOS_校長報表_202604_2015_2025_260423",</br>
+            "file_name": "台大院系級",</br>
+            "template_types":[102,103],</br>
+            "org_ids" : ["TWU000001","TWU000091","TWU000013","TWU000002","TWU000003","TWU000007"],</br>
+            "year_list" : ["2020", "2021","2022","2023","2024", "2025"],</br>
+            "target" : 2,</br>
+            "year_format": "x-y年",</br>
+            "source_name": "SCI-E、SSCI、A&HCI"</br>
         }</br>
 
     * db_name - 要抓取的DB名稱，str
