@@ -27,7 +27,7 @@ regReportReportTableName = "AC_Manager.dbo.RegReport_tableTest" if DEBUG else "A
 ## 004跟005併校，變091 - 20260827
 def load_orgs(rid) -> tuple[bool, list[str] | None]:
     dal = get_dal()
-    strCmd = f"SELECT DISTINCT OrgSerial FROM {regReportOrgTableName} WHERE RID = '{rid}'"
+    strCmd = f"SELECT DISTINCT OrgSerial FROM {regReportOrgTableName} WHERE RID = '{rid}' ORDER BY OrgSerial"
     query_res = dal.query_2d_raw(strCmd)
     except_orgs = ["TWU000004", "TWU000005"]
     replace_org = "TWU000091"
@@ -43,7 +43,7 @@ def load_orgs(rid) -> tuple[bool, list[str] | None]:
 ## ESI - load 領域
 def load_fields(rid) -> tuple[bool, list[str] | None]:
     dal = get_dal()
-    strCmd = f"SELECT DISTINCT FID FROM {regReportFieldTableName} WHERE RID = '{rid}'"
+    strCmd = f"SELECT DISTINCT FID FROM {regReportFieldTableName} WHERE RID = '{rid}' ORDER BY FID"
     res = dal.query_2d_raw(strCmd)
     
     return True,[r[0] for r in res]
