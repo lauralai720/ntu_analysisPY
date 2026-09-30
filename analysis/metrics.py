@@ -751,6 +751,35 @@ class GrowthRate(Metrics):
             self.subjects.YearList.append(y)
 
 @dataclass
+class PaperList(Metrics):
+    def cited_count(self,remove_subj_column : bool = False, keep_column : "Column" = None) -> pd.DataFrame:
+        compute_object = self.get_compute_object_with_join_table(
+            db_schema.schema.MainBindColumnName, 
+            db_schema.schema.CitationsCountTableName, 
+            db_schema.schema.MainBindColumnName, 
+            db_schema.schema.MainBindColumnName
+        )
+
+        cited_count_col = compute_object.get_joined_right_table().RetrieveColumn(db_schema.schema.CitedCountColumnName)
+        compute_object.add_keep_col(cited_count_col)
+
+        if keep_column is not None:
+            compute_object.add_keep_col(keep_column, 0)
+
+        dt = compute_object.to_list(remove_subj_column)
+        df = dal.datatable_to_dataframe(dt)
+
+        columns = df.columns.tolist()
+
+        # 前面所有欄位(除了最後兩欄)遞增排序,最後一欄遞減排序
+        sort_columns = columns[:-2] + [columns[-1]]
+        ascending = [True] * len(columns[:-2]) + [False]
+
+        df_sorted = df.sort_values(by=sort_columns, ascending=ascending)
+
+        return df_sorted
+
+@dataclass
 class PaperGrowthRateMetric(GrowthRate):
     def paper(self, use_percent_age : bool = True, na_val_notation = None)-> pd.DataFrame:
         return self.calculate_growth_rate(self.main_paper_count(), use_percentage=use_percent_age, na_val_notation=na_val_notation)
@@ -763,6 +792,10 @@ class Indicator(Metrics):
     @property
     def metrics(self) -> Metrics:
         return None
+    
+    @cached_property
+    def hIndex_hcore_cited_count(self) -> pd.DataFrame:   
+        return self.list_metrics.cited_count()
 
     def avg_cited(self, df_cited : pd.DataFrame = None) -> pd.DataFrame:
         df_num = self.metrics.main_paper_count()
@@ -777,10 +810,16 @@ class Indicator(Metrics):
         res = res.drop(columns=["Num","Cited"])
         return res
 
+    def h_index(self) -> pd.DataFrame:
+        return dal.b06_h_index_calculate(self.hIndex_hcore_cited_count)
+
 @dataclass
 class PaperIndicator(Indicator):
     @property
     def metrics(self) -> PaperMetrics:
         return PaperMetrics(subjects=self.subjects,get_where_clauses=self.get_where_clauses)
+    @property
+    def list_metrics(self) -> PaperMetrics:
+        return PaperList(subjects=self.subjects,get_where_clauses=self.get_where_clauses)
 
     

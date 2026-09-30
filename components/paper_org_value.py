@@ -125,9 +125,14 @@ class PaperOrgSelectedValue:
     def __init__(self):
         self.items : list[PaperOrgSelectItem] = []
         self.author_index :AuthorIndex = AuthorIndex.NotLimited
+        self.merge_items : dict = {}
+
     def add(self, org_item:PaperOrgSelectItem):
         self.items.append(org_item)
 
+    def find_org(self, org_serial:str)->tuple[str,str,str]:
+        res = next((org for org in self.items if org_serial == org.raw_serial), None)
+        return res.raw_serial, res.org_name_ch, res.org_name_en
 
 @dataclass
 class PaperOrg:

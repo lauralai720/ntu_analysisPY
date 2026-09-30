@@ -16,7 +16,7 @@ from components.year_selector import WOSYearSelector
 from components.template import *
 from components.template_wos import *
 from components.paper_org_value import AuthorIndex
-from components.subject_info import GetSubject, PaperJcrIFSubjectInfo
+from components.subject_info import GetSubject, PaperJcrIFSubjectInfo, PaperOrgSelectedValue
 from export.report_exporter import *
 from export.output_tab import *
 from analysis.metrics import *
@@ -39,7 +39,7 @@ TemplateNameMapping = {
     TemplateType.S5 : "平均被引用次數統計",
     TemplateType.S6 : "論文數及成長率",
     TemplateType.S7 : "高影響期刊係數前15%及40%論文數",
-    TemplateType.S8 : "H指數", # 暫時不做
+    TemplateType.S8 : "H指數",
     TemplateType.S9 : ["三年論文成長率","三年論文成長率"],
 }
 
@@ -76,6 +76,7 @@ class PresidentWOSAnalysis(Anaysis):
     get_where_clauses: Callable[["Table"], list["Where"]] = None
     min_year : str = ""
     max_year : str = ""
+    merge_org_list : dict = field(default_factory=dict)
 
     def __post_init__(self):
         self._paper_count = ResettableLazy(self._fetch_paper_count)
@@ -94,6 +95,7 @@ class PresidentWOSAnalysis(Anaysis):
         self._ahci_growth_rate = ResettableLazy(self._fetch_ahci_growth_rate)
         self._if15_paper_count = ResettableLazy(self._fetch_if15_paper_count)
         self._if40_paper_count = ResettableLazy(self._fetch_if40_paper_count)
+        self._h_index= ResettableLazy(self._fetch_h_index)
 
     @cached_property
     def orgs(self) -> list[str] :
@@ -103,6 +105,10 @@ class PresidentWOSAnalysis(Anaysis):
     def latest_jrc_year(self) -> int:
         _jcrVersions = self.get_jcr_version_list()
         return max(_jcrVersions)
+
+    @cached_property
+    def merge_orgs(self) -> dict:
+        return self.subjects.WOSselectedVal1.merge_items
     
     @property
     def years(self) -> list[str] :
@@ -113,6 +119,7 @@ class PresidentWOSAnalysis(Anaysis):
     @property
     def paper_count(self) -> ORG_MAP:
         return self._paper_count.value
+
     @property
     def scie_paper_count(self) -> ORG_MAP:
         return self._scie_paper_count.value
@@ -159,6 +166,9 @@ class PresidentWOSAnalysis(Anaysis):
     def if40_paper_count(self) -> ORG_MAP:
         return self._if40_paper_count.value
     @property
+    def h_index(self) -> ORG_MAP:
+        return self._h_index.value
+    @property
     def paper_metrics(self) -> PaperMetrics:
         return PaperMetrics(subjects=self.subjects, get_where_clauses=self.get_where_clauses)
 
@@ -173,7 +183,7 @@ class PresidentWOSAnalysis(Anaysis):
         df_paper_count = self.paper_metrics.main_paper_count()
         res = self.get_orgmap_from_df(df_paper_count)
         return res
-    
+
     def _fetch_cited_count(self):
         df_cited = self.paper_metrics.cited
         res = self.get_orgmap_from_df(df_cited)
@@ -360,6 +370,12 @@ class PresidentWOSAnalysis(Anaysis):
         res = self.get_orgmap_from_df(df_if15_paper_count)
         return res
 
+    def _fetch_h_index(self):
+        m = self.paper_indicator_metrics
+        df_h_index = self.paper_indicator_metrics.h_index()
+        res = self.get_orgmap_from_df(df_h_index)
+        return res
+
     def get_subject_where_clause(self, subj_info:GetSubject, selected_val : list, table:"Table"):
         subj, subj_dict = subj_info.get_subject(selected_val)
         selected_val = [-1,-1,-1,-1]
@@ -371,8 +387,6 @@ class PresidentWOSAnalysis(Anaysis):
         cmd_str = f"SELECT DISTINCT {db_schema.schema.YearColumnName} FROM {db_schema.schema.JcrTableName}"
         query_res = dal.query_2d_raw(cmd_str)
         return [x[0] for x in query_res]
-
-
     
     def run(self, report : PresidentWOSReport) -> ReportExporter:
 
@@ -411,8 +425,9 @@ class PresidentWOSAnalysis(Anaysis):
 
         print("準備匯出檔案....")
         # 匯出
-        now = datetime.now().strftime("%y-%m-%d %H%M%S")
-        filename = f"{report.project_name}_{now}"
+        #now = datetime.now().strftime("%y-%m-%d %H%M%S")
+        #filename = f"{report.project_name}_{now}"
+        filename = f"{report.project_name}"
         output_path = f"{report.output_path}{filename}.xlsx"
 
         if output_path:
@@ -437,7 +452,7 @@ class PresidentWOSAnalysis(Anaysis):
             TemplateType.S5: lambda: (S5(sheet_name,idx,tab_name), self.get_s5_rows()),
             TemplateType.S6: lambda: (S6(sheet_name,idx,tab_name), self.get_s6_rows()),
             TemplateType.S7: lambda: (S7(sheet_name,idx,tab_name), self.get_s7_rows()),
-            #TemplateType.S8: lambda: (S8(sheet_name), self.get_s8_rows()),
+            #TemplateType.S8: lambda: (S8(sheet_name,idx,tab_name), self.get_s8_rows()), #暫不製作
             TemplateType.S9: lambda: (S9(sheet_name,idx,tab_name), self.get_s9_rows()),
         }
 
@@ -446,10 +461,51 @@ class PresidentWOSAnalysis(Anaysis):
 
         tmpl, (temp_rows, basic_rows)= builders[template_type]()
         return tmpl, temp_rows, basic_rows
+    
+    @cached_property
+    def partial_merge_periods(self) -> dict[str, list[tuple[int, int]]]:
+        merger_orgs = {}
+        for org_serial, year_map in self.merge_orgs.items():
+            periods = []
+
+            for year_key in year_map:
+                start_year, end_year = map(int, year_key.split("_"))
+
+                if (start_year, end_year) != (1900, 2300):
+                    periods.append((start_year, end_year))
+                
+            if periods:
+                merger_orgs[org_serial] = periods
+        key_by_year = {}
+        for k,v in merger_orgs.items():
+            # 再建立 A 正式列：每年決定要取哪一個 key
+            
+            key_by_year[k] = {}
+            for year in self.years:
+                valid_periods = [
+                    period
+                    for period in v
+                    if period[0] <= int(year) <= period[1]
+                ]
+
+                if not valid_periods:
+                    key_by_year[k][year] = f"{k}_1900_2300"  # A_1900_2300
+                    continue
+
+                selected_start, selected_end = max(
+                    valid_periods,
+                    key=lambda period: period[0],
+                )
+
+                key_by_year[k][year] = (
+                    f"{k}_{selected_start}_{selected_end}"
+                )
+        return key_by_year
 
     def _split_orgs(self, org:str) -> list[tuple[str, str, str]]:
         """共用的前置處理:拆解 org 字串,回傳 (org_serial, name1, name2) 的清單"""
-        splited_org = org.split("\x1c")
+        #splited_org = org.split("\x1c")
+        splited_org = org.split("_")
         return (splited_org[0], splited_org[1], splited_org[2])
         
 
@@ -460,116 +516,209 @@ class PresidentWOSAnalysis(Anaysis):
         """
         temp_rows = []
         basic_rows = []
-
+        org_selected : PaperOrgSelectedValue = self.subjects.WOSselectedVal1
+        partial_merge_periods = self.partial_merge_periods
         for org in self.orgs:
-            org_serial, name1, name2 = self._split_orgs(org)
-            compute_func(org, temp_rows)
+            #org_serial, name1, name2 = self._split_orgs(org)
+            org_serial, start_year, end_year = self._split_orgs(org)
+            
+            if (int(start_year), int(end_year)) != (1900, 2300):
+                continue
+
+            org_serial, name1, name2 = org_selected.find_org(org_serial)
+
+            key_by_year = partial_merge_periods.get(org_serial, {})
+            
+            # 判斷是否有合併的資料，需要多一筆未合併的row
+            if not key_by_year:
+                compute_func(org, temp_rows)
+                basic_rows.append([org_serial, name1, name2])
+                continue
+
+            if len(set(key_by_year.values())) > 1:
+                # 有部分年度合併：先新增 *A 未合併查驗列
+                compute_func(org, temp_rows)
+                basic_rows.append([f"*{org_serial}", name1, name2])
+
+            compute_func(org, temp_rows, key_by_year)
             
             basic_rows.append([org_serial, name1, name2])
 
         return temp_rows, basic_rows
 
     def get_s1_rows(self):   
-        def compute(org:str, temp_rows:list):
-            org_paper_count = self.paper_count.get(org,{})
-            growth_rate_per_year = self.growth_rate_without_year.get(org,{})
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
             res_org_val = []
             for y in self.years:
-                cnt = org_paper_count.get(y, 0)
-                gr = growth_rate_per_year.get(y, "")
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
+                cnt = self.paper_count.get(org_key,{}).get(y, 0)
+                gr = self.growth_rate_without_year.get(org_key,{}).get(y, "")
                 res_org_val.extend([str(cnt),str(gr)])
+            temp_rows.append(res_org_val)
 
-            temp_rows.append(res_org_val)  # 直接新增到傳進來的 temp_rows
+            # org_paper_count = self.paper_count.get(org,{})
+            # growth_rate_per_year = self.growth_rate_without_year.get(org,{})
+            # res_org_val = []
+            # for y in self.years:
+            #     cnt = org_paper_count.get(y, 0)
+            #     gr = growth_rate_per_year.get(y, "")
+            #     res_org_val.extend([str(cnt),str(gr)])
+
+            # temp_rows.append(res_org_val)  # 直接新增到傳進來的 temp_rows
         return self._build_rows(compute)
 
     def get_s2_rows(self):
-        def compute(org:str, temp_rows:list):
-            org_paper_count = self.paper_count.get(org,{})
-            first_or_reprint_author_paper_count_per_year = self.first_or_reprint_author_paper_count.get(org,{})
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
             res_org_val = []
             for y in self.years:
-                cnt = org_paper_count.get(y, 0)
-                first_or_reprint_author_cnt = first_or_reprint_author_paper_count_per_year.get(y, 0)
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
 
+                cnt = self.paper_count.get(org_key,{}).get(y, 0)
+                first_or_reprint_author_cnt = self.first_or_reprint_author_paper_count.get(org_key,{}).get(y, 0)
+            
                 proportion = 0 if cnt == 0 else first_or_reprint_author_cnt / cnt
                 res_org_val.extend([str(cnt),str(first_or_reprint_author_cnt),str(proportion)])
-
             temp_rows.append(res_org_val)
-        return self._build_rows(compute)
 
+            # org_paper_count = self.paper_count.get(org,{})
+            # first_or_reprint_author_paper_count_per_year = self.first_or_reprint_author_paper_count.get(org,{})
+            # res_org_val = []
+            # for y in self.years:
+            #     cnt = org_paper_count.get(y, 0)
+            #     first_or_reprint_author_cnt = first_or_reprint_author_paper_count_per_year.get(y, 0)
+
+            #     proportion = 0 if cnt == 0 else first_or_reprint_author_cnt / cnt
+            #     res_org_val.extend([str(cnt),str(first_or_reprint_author_cnt),str(proportion)])
+
+            # temp_rows.append(res_org_val)
+        return self._build_rows(compute)
 
     def get_s3_rows(self):
-        def compute(org:str, temp_rows:list):
-            org_cited_count = self.cited_count.get(org,{})
-            first_or_reprint_author_cited_count_per_year = self.first_or_reprint_author_cited_count.get(org,{})
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
             res_org_val = []
             for y in self.years:
-                cited = org_cited_count.get(y, 0)
-                first_or_reprint_author_cited = first_or_reprint_author_cited_count_per_year.get(y, 0)
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
 
+                cited = self.cited_count.get(org_key,{}).get(y, 0)
+                first_or_reprint_author_cited = self.first_or_reprint_author_cited_count.get(org_key,{}).get(y, 0)
+            
                 proportion = 0 if cited == 0 else first_or_reprint_author_cited / cited
                 res_org_val.extend([str(cited),str(first_or_reprint_author_cited),str(proportion)])
-
             temp_rows.append(res_org_val)
-        return self._build_rows(compute)
+            # org_cited_count = self.cited_count.get(org,{})
+            # first_or_reprint_author_cited_count_per_year = self.first_or_reprint_author_cited_count.get(org,{})
+            # res_org_val = []
+            # for y in self.years:
+            #     cited = org_cited_count.get(y, 0)
+            #     first_or_reprint_author_cited = first_or_reprint_author_cited_count_per_year.get(y, 0)
 
-    
+            #     proportion = 0 if cited == 0 else first_or_reprint_author_cited / cited
+            #     res_org_val.extend([str(cited),str(first_or_reprint_author_cited),str(proportion)])
+
+            # temp_rows.append(res_org_val)
+        return self._build_rows(compute)
+ 
     def get_s4_rows(self):
-        def compute(org:str, temp_rows:list):
-            growth_rate_per_year = self.growth_rate.get(org,{})
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
             res_org_val = []
             for y in self.years:
-                gr = growth_rate_per_year.get(y,"")
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
+
+                gr = self.growth_rate.get(org_key,{}).get(y, "")
+                
                 res_org_val.append(str(gr))
             temp_rows.append(res_org_val)
+            # growth_rate_per_year = self.growth_rate.get(org,{})
+            # res_org_val = []
+            # for y in self.years:
+            #     gr = growth_rate_per_year.get(y,"")
+            #     res_org_val.append(str(gr))
+            # temp_rows.append(res_org_val)
 
         return self._build_rows(compute)
 
     def get_s5_rows(self):
-        def compute(org:str, temp_rows:list):
-            org_avg_cited = self.avg_cited.get(org,{})
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
             res_org_val = []
             for y in self.years:
-                ac = org_avg_cited.get(y, 0)
-                res_org_val.extend([str(ac)])
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
+                ac = self.avg_cited.get(org_key,{}).get(y, 0)
+                res_org_val.append(str(ac))
             temp_rows.append(res_org_val)
+            # org_avg_cited = self.avg_cited.get(org,{})
+            # res_org_val = []
+            # for y in self.years:
+            #     ac = org_avg_cited.get(y, 0)
+            #     res_org_val.extend([str(ac)])
+            # temp_rows.append(res_org_val)
         return self._build_rows(compute)
 
     def get_s6_rows(self):
-        def compute(org:str, temp_rows:list):
-            scie_paper_count_per_year = self.scie_paper_count.get(org, {})
-            ssci_paper_count_per_year = self.ssci_paper_count.get(org, {})
-            ahci_paper_count_per_year = self.ahci_paper_count.get(org, {})
-            scie_growth_rate_per_year = self.scie_growth_rate.get(org, {})
-            ssci_growth_rate_per_year = self.ssci_growth_rate.get(org, {})
-            ahci_growth_rate_per_year = self.ahci_growth_rate.get(org, {})
-            
-            for y in self.years:         
-                scie_cnt = scie_paper_count_per_year.get(y, 0)
-                ssci_cnt = ssci_paper_count_per_year.get(y, 0)
-                ahci_cnt = ahci_paper_count_per_year.get(y, 0)
-                scie_gr = scie_growth_rate_per_year.get(y ,"")
-                ssci_gr = ssci_growth_rate_per_year.get(y ,"")
-                ahci_gr = ahci_growth_rate_per_year.get(y ,"")       
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
+
+            for y in self.years:
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
+                scie_cnt = self.scie_paper_count.get(org_key, {}).get(y, 0)
+                ssci_cnt = self.ssci_paper_count.get(org_key, {}).get(y, 0)
+                ahci_cnt = self.ahci_paper_count.get(org_key, {}).get(y, 0)
+                scie_gr = self.scie_growth_rate.get(org_key, {}).get(y ,"")
+                ssci_gr = self.ssci_growth_rate.get(org_key, {}).get(y ,"")
+                ahci_gr = self.ahci_growth_rate.get(org_key, {}).get(y ,"")       
                 val_list = [scie_cnt, scie_gr, ssci_cnt, ssci_gr, ahci_cnt, ahci_gr]
                 temp_rows.append([str(v) for v in val_list])
 
+            # scie_paper_count_per_year = self.scie_paper_count.get(org, {})
+            # ssci_paper_count_per_year = self.ssci_paper_count.get(org, {})
+            # ahci_paper_count_per_year = self.ahci_paper_count.get(org, {})
+            # scie_growth_rate_per_year = self.scie_growth_rate.get(org, {})
+            # ssci_growth_rate_per_year = self.ssci_growth_rate.get(org, {})
+            # ahci_growth_rate_per_year = self.ahci_growth_rate.get(org, {})
+            
+            # for y in self.years:         
+            #     scie_cnt = scie_paper_count_per_year.get(y, 0)
+            #     ssci_cnt = ssci_paper_count_per_year.get(y, 0)
+            #     ahci_cnt = ahci_paper_count_per_year.get(y, 0)
+            #     scie_gr = scie_growth_rate_per_year.get(y ,"")
+            #     ssci_gr = ssci_growth_rate_per_year.get(y ,"")
+            #     ahci_gr = ahci_growth_rate_per_year.get(y ,"")       
+            #     val_list = [scie_cnt, scie_gr, ssci_cnt, ssci_gr, ahci_cnt, ahci_gr]
+            #     temp_rows.append([str(v) for v in val_list])
+
         return self._build_rows(compute)
 
-
     def get_s7_rows(self):
-        def compute(org:str, temp_rows:list):
-            paper_count_per_year = self.paper_count.get(org,{})
-            if15_paper_count_per_year = self.if15_paper_count.get(org,{})
-            if40_paper_count_per_year = self.if40_paper_count.get(org,{})
-            
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
+                    
             cnt_list = []
             if15_cnt_list = []
             if40_cnt_list = []
             for y in self.years:
-                cnt = paper_count_per_year.get(y, 0)
-                if15_cnt = if15_paper_count_per_year.get(y, 0)
-                if40_cnt = if40_paper_count_per_year.get(y, 0)
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
+
+                cnt = self.paper_count.get(org_key,{}).get(y, 0)
+                if15_cnt = self.if15_paper_count.get(org_key,{}).get(y, 0)
+                if40_cnt = self.if40_paper_count.get(org_key,{}).get(y, 0)
 
                 cnt_list.append(str(cnt))
                 if cnt == 0 :
@@ -582,7 +731,54 @@ class PresidentWOSAnalysis(Anaysis):
             temp_rows.append(cnt_list)
             temp_rows.append(if15_cnt_list)
             temp_rows.append(if40_cnt_list)
+            
+            # paper_count_per_year = self.paper_count.get(org,{})
+            # if15_paper_count_per_year = self.if15_paper_count.get(org,{})
+            # if40_paper_count_per_year = self.if40_paper_count.get(org,{})
+            
+            # cnt_list = []
+            # if15_cnt_list = []
+            # if40_cnt_list = []
+            # for y in self.years:
+            #     cnt = paper_count_per_year.get(y, 0)
+            #     if15_cnt = if15_paper_count_per_year.get(y, 0)
+            #     if40_cnt = if40_paper_count_per_year.get(y, 0)
 
+            #     cnt_list.append(str(cnt))
+            #     if cnt == 0 :
+            #         if15_cnt_list.extend(["0","0"])
+            #         if40_cnt_list.extend(["0","0"])
+            #     else:
+            #         if15_cnt_list.extend([str(if15_cnt), str(if15_cnt/cnt)])
+            #         if40_cnt_list.extend([str(if40_cnt), str(if40_cnt/cnt)])
+
+            # temp_rows.append(cnt_list)
+            # temp_rows.append(if15_cnt_list)
+            # temp_rows.append(if40_cnt_list)
+
+        return self._build_rows(compute)
+
+    # H指數，2026已移除，但先保留程式邏輯，暫用不到
+    def get_s8_rows(self):
+        def compute(org:str, temp_rows:list, merge_key:dict = None):
+            res_org_val = []
+            for y in self.years:
+                if merge_key:
+                    org_key = merge_key[y]
+                else:
+                    org_key = org
+
+                h_idx = self.h_index.get(org_key,{}).get(y, 0)
+                res_org_val.extend([str(h_idx)])
+            temp_rows.append(res_org_val)
+            # h_index_per_year = self.h_index.get(org,{})
+            
+            # res_org_val = []
+            # for y in self.years:
+            #     h_idx = h_index_per_year.get(y, 0)
+            #     res_org_val.extend([str(h_idx)])
+
+            # temp_rows.append(res_org_val)
         return self._build_rows(compute)
 
     def reset_year_subject(self):
@@ -595,17 +791,108 @@ class PresidentWOSAnalysis(Anaysis):
         self.subjects.yearBindCol = new_bind
         self.subjects.YearList = years
 
+    def _build_s9_rows(self, compute_func) -> tuple[list, list]:
+        """
+        共用的組裝流程,compute_func 是每個 sN 專屬的計算邏輯,
+        接收 (org_serial, name1, name2),回傳這筆資料的 temp_row(如果有)。
+        """
+        temp_rows = []
+        basic_rows = []
+        org_selected : PaperOrgSelectedValue = self.subjects.WOSselectedVal1
+        partial_merge_periods = self.partial_merge_periods
+        for org in self.orgs:
+            #org_serial, name1, name2 = self._split_orgs(org)
+            org_serial, start_year, end_year = self._split_orgs(org)
+            has_original = False
+            if (int(start_year), int(end_year)) != (1900, 2300):
+                continue
+
+            org_serial, name1, name2 = org_selected.find_org(org_serial)
+
+            key_by_year = partial_merge_periods.get(org_serial, {})
+            
+            # 判斷是否有合併的資料，需要多一筆未合併的row
+            if key_by_year:
+                if len(set(key_by_year.values())) > 1:
+                    has_original = True
+            compute_func(org_serial, temp_rows)
+            basic_rows.append([org_serial, name1, name2])
+
+            if has_original:
+                org_serial = f"*{org_serial}"
+                compute_func(org_serial, temp_rows)
+                basic_rows.append([org_serial, name1, name2])
+
+        return temp_rows, basic_rows
+    
     def get_s9_rows(self):
         # 將年份改成 3年，2年重複的形式(2020-2022、2021-2023...etc)
-        self.reset_year_subject()
-        def compute(org:str, temp_rows:list):
-            growth_rate_in_year = self.growth_rate_range_year.get(org,{})
-            res_org_val = []
+        select_years = get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
+        
+        partial_merge_periods = self.partial_merge_periods
+        merged_paper_count_per_year = {}
+        merged_paper_count_range_year = {}
+
+        def add_paper_count_range_year(res:dict, org_serial:str, per_year_vals:list[int]):
+            res[org_serial] = {}
+            for range_y in select_years:
+                (s , e) = map(int, range_y.split("-"))
+                sum = 0
+                for r_y in range(s, e + 1):
+                    per_y_val = per_year_vals.get(str(r_y))
+                    sum = sum+per_y_val
+                res[org_serial][range_y] = sum
+
+        for org in self.orgs:
+            org_serial, start_year, end_year = self._split_orgs(org)
+                        
+            if (int(start_year), int(end_year)) != (1900, 2300):
+                continue
+
+            key_by_year = partial_merge_periods.get(org_serial, {})
+            org_key = org
+            org_serial = org_serial
+
+            # 判斷是否有合併的資料，需要多一筆未合併的row
+            if not key_by_year:
+                merged_paper_count_per_year[org_serial] = {}
+                for y in self.years:
+                    cnt = self.paper_count.get(org_key,{}).get(y, 0)
+                    merged_paper_count_per_year[org_serial][y] = cnt
+                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
+                continue
+
+            merged_paper_count_per_year[org_serial] = {}
             for y in self.years:
-                gr = growth_rate_in_year.get(y,"")
+                org_key = key_by_year[y]
+                cnt = self.paper_count.get(org_key,{}).get(y, 0)
+                merged_paper_count_per_year[org_serial][y] = cnt
+
+            add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
+
+            if len(set(key_by_year.values())) > 1:
+                org_serial = f"*{org_serial}"
+                merged_paper_count_per_year[org_serial] = {}
+                for y in self.years:
+                    cnt = self.paper_count.get(org_key,{}).get(y, 0)    
+                    merged_paper_count_per_year[org_serial][y] = cnt
+                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
+
+        def compute(org:str, temp_rows:list):
+            paper_count_range_year = merged_paper_count_range_year.get(org,{})
+            res_org_val = []
+            previous_value = None
+            for y in select_years:
+                val = paper_count_range_year[y]
+                gr = ""
+                if previous_value is not None:
+                    if previous_value != 0 :
+                        gr = round((val - previous_value) / previous_value, 4)
+                    
+                previous_value = val
                 res_org_val.append(str(gr))
             temp_rows.append(res_org_val)
-        return self._build_rows(compute)
+        return self._build_s9_rows(compute)
 
 
     @staticmethod

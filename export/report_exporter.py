@@ -2,10 +2,11 @@
 
 from dataclasses import dataclass, field
 from openpyxl import Workbook
-
+import os
 # PRIS
 from components.template import Template
 from export.excel_report import *
+from exceptions import PRISError
 
 ## 輸出成excel
 ## 統整所有sheet
@@ -38,8 +39,20 @@ class ReportExporter:
         # 隱藏計算無排版的報表
         self.hide_all_rawdata_tabs(wb)
 
-        wb.save(path)
-            
+        #wb.save(path)
+        self.save_file(wb, path)
+
+    def save_file(self,wb:Workbook, output_path :str):
+        if wb is None:
+            raise PRISError("Save Workbook is empty!")
+         
+        if os.path.exists(output_path):
+            print(f"檔案已存在,將被覆蓋:{output_path}")
+
+        try:
+            wb.save(output_path)
+        except:
+            raise PRISError("檔案可能正被其他程式開啟,請先關閉後再試")
 
     def create_table_of_contents(self, wb: Workbook, templates: list[Template]):
         excel_report = ExcelReport()
@@ -84,5 +97,5 @@ class ReportExporter:
         # 隱藏計算無排版的報表
         self.hide_all_rawdata_tabs(wb)
 
-        wb.save(path)
-                    
+        #wb.save(path)
+        self.save_file(wb, path)            

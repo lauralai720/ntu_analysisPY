@@ -9,11 +9,14 @@ run_report(**kwargs):</br>
 </br>
 呼叫參數請看底下的參數說明
 </br>
-main.py測試用的呼叫方式</br>
-ESI報表</br>
+
+**main.py測試用的呼叫方式**</br>
+
+*ESI報表*</br>
 python main.py --analysis-type 6 --output-path "../PRIS_OUTPUT//" --model-id 2 --main-version 2026-03-12 --compare-version 2025-03-13</br>
 </br>
-WOS報表</br>
+
+*WOS報表*</br>
 python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --db-name "PRIS_WOS_校長報表_202604_2015_2025_260423" --file-name "國內研究型大學" --templates 102 103 104 105 109 --years 2020 2021 2022 2023 2024 2025 --orgs "TWU000001" "TWU000091" "TWU000013" "TWU000002" "TWU000003" "TWU000007" "TWU000006" --year-format "x-y年" --source-name "SCI-E、SSCI、A&HCI"</br>
 </br>
 ```
@@ -59,7 +62,8 @@ python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --d
 - 校長報表(WOS)</br>
     example : </br>
         kwargs = {</br>
-            "analysis_type"=6, "output_path"="XXXX", </br>
+            "analysis_type"=4, </br>
+            "output_path"="XXXX", </br>
             "db_name":"PRIS_WOS_校長報表_202604_2015_2025_260423",</br>
             "file_name": "台大院系級",</br>
             "template_types":[102,103],</br>
@@ -73,7 +77,7 @@ python main.py --analysis-type 4 --output-path "../PRIS_OUTPUT//" --target 1 --d
     * db_name - 要抓取的DB名稱，str
 
     * file_name - 輸出的檔名，str
-        - 原pris的預設檔名: 國內七所研究型大學/台大院級/台大系所/國內十七所大學/亞太代表性大學
+        - 原pris的預設檔名: 國內七所研究型大學 / 台大院級 / 台大系所 / 國內十七所大學/ 亞太代表性大學
 
     * template_types - 報表類型列表，list[int]，格式 : [101,102...,109]
         - 101 => S1 - 歷年上半年論文數統計

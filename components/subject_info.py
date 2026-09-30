@@ -3,6 +3,7 @@ from typing import Protocol,Any
 
 import common.db_schema as db_schema
 import common.locale_manager as locale_manager
+import common.util as Util
 from exceptions import PRISError
 
 class GetSubject(Protocol):
@@ -228,9 +229,9 @@ class WOSPaperOrgSubjectInfo:
                 self.add_paper_org(self.orgs_2nd_list, org_item)
 
             # sort
-            if sort:
-                sort_selected_list = sorted(self.orgs_selected_list, key=lambda x: x.org_serial, reverse=True)
-                self.orgs_selected_list = sort_selected_list
+            # if sort:
+            #     sort_selected_list = sorted(self.orgs_selected_list, key=lambda x: x.org_serial, reverse=True)
+            #     self.orgs_selected_list = sort_selected_list
             print(f"總共所要分析的機構數量 : {len(self.orgs_selected_list)}")
 
     def add_paper_org(self,ret : list[PaperOrg], paper_org : PaperOrg):
@@ -311,8 +312,28 @@ class WOSPaperOrgSubjectInfo:
 
             dict_res[select_org.org_serial] = PaperOrgSelectItem(select_org.org_serial, select_org.name_ch, select_org.name_en)
         res.items = list(dict_res.values())
+
+        merge_list = self.load_merge_orgs()
+        res.merge_items = merge_list
         print(f"refresh 過後的機構數量: {len(res.items)}")
         return res
+
+    def load_merge_orgs(self) -> dict :
+        from dal_provider import get_dal
+        dal = get_dal()
+        cmd_str = f"SELECT * FROM {db_schema.schema.OrgMerge};"
+        orgs_merge_list = dal.query_2d_raw(cmd_str)
+        merge_list : dict[str,list]= {}
+        for merge_org in orgs_merge_list:
+            main_org_serial = Util.org_serial_code_type(merge_org[0].strip())
+            merge_org_serial = Util.org_serial_code_type(merge_org[1].strip())
+            year_key = f"{merge_org[2]}_{merge_org[3]}"
+            if main_org_serial not in merge_list:
+                merge_list[main_org_serial] = {}
+            if year_key not in merge_list[main_org_serial]:
+                merge_list[main_org_serial][year_key] = []
+            merge_list[main_org_serial][year_key].append(merge_org_serial)
+        return merge_list
 
     def refresh_orgs(self)-> PaperOrgSelectedValue:
         res = PaperOrgSelectedValue()
@@ -445,58 +466,58 @@ class WOSPaperOrgSubjectInfo:
         ret = dal.create_subject(tblMain, tblMain.ShownColumn)
 
         ret.Initialize()
-        concat_list = {
-            "TWU000001100000" : ["TWU000001110000"],
-            "TWU00000110%" : ["TWU00000111%"],
-            "TWU000001120000" : ["TWU000001130000", "TWU000001140000"],
-            "TWU00000112%" : ["TWU00000113%", "TWU00000114%"],
-            "TWU0000010663%" : ["TWU0000012337%"],
-            "TWU000001066300" : ["TWU000001233700"],
-            "TWU0000010827%" : ["TWU0000010822%", "TWU0000010824%"],
-            "TWU000001082700" : ["TWU000001082200", "TWU000001082400"],
-            "TWU0000012310%" : ["TWU0000012319%"],
-            "TWU000001231000" : ["TWU000001231900"],
-            "TWU0000012301%" : ["TWU0000012333%"],
-            "TWU000001230100" : ["TWU000001233300"],
-        }
+        concat_list = final_select_orgs.merge_items
+        
         for org in orgs:
             for org_item in org.items:
-                restrict_org = None
+                def ret_add(ret :"Subject", org_item, year_check :str = "1900_2300"):
+                    restrict_org = None
+                    if isinstance(org_item, PaperOrg2ndItem):
+                        tblOrg.SetFullName(db_schema.schema.Org2ndTableName)
+                        restrict_org = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, org_item.query_var)
+                        #
+                        if org_item.serial in concat_list:
+                            if year_check in concat_list[org_item.serial]:
+                                for concat_org_serial in concat_list[org_item.serial][year_check]:
+                                    restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, concat_org_serial)
+                                    restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
+                    else:
+                        tblOrg.SetFullName(db_schema.schema.Org1stTableName)
+                        restrict_org = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Equal, org_item.serial)
+
+                    author_idx_restrict = None
+                    
+                    if final_select_orgs.author_index == AuthorIndex.FirstAuthor:
+                        author_idx_restrict = dal.create_where_column_to_const(colAORAuthorIdx,dal.OPTYPE.Equal,"1")
+                    elif final_select_orgs.author_index == AuthorIndex.Reprint:
+                        author_idx_restrict = dal.create_where_column_to_const(colAORReprint,dal.OPTYPE.Equal,"1")
+                    elif final_select_orgs.author_index == AuthorIndex.FirstOrReprint:
+                        author_idx_restrict1 = dal.create_where_column_to_const(colAORAuthorIdx,dal.OPTYPE.Equal,"1")
+                        author_idx_restrict2 = dal.create_where_column_to_const(colAORReprint,dal.OPTYPE.Equal,"1")
+                        author_idx_restrict = dal.create_where_multiple([author_idx_restrict1, author_idx_restrict2],dal.OPTYPE.Or)
+                    if author_idx_restrict:
+                        restrict_org= dal.create_where_multiple([restrict_org, author_idx_restrict],dal.OPTYPE.And)
+                    query = dal.create_where_column_val_in_join_table_column_multiple([colBind, colAddrIdx, colRp],[ colOrgBind, colOrgAddrIdx, colOrgReprint ], jtb, restrict_org)
+                    org_key = self.get_org_key(org_serial=org_item.serial, extra=year_check)
+                    ret.Add(org_key, [ query ])
+
+                added = False
                 if isinstance(org_item, PaperOrg2ndItem):
-                    tblOrg.SetFullName(db_schema.schema.Org2ndTableName)
-                    restrict_org = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, org_item.query_var)
-                    #
-                    if org_item.query_var in concat_list:
-                        for concat_org_serial in concat_list[org_item.query_var]:
-                            restrict_org2 = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Like, concat_org_serial)
-                            restrict_org = dal.create_where_multiple([restrict_org, restrict_org2], dal.OPTYPE.Or)
-                else:
-                    tblOrg.SetFullName(db_schema.schema.Org1stTableName)
-                    restrict_org = dal.create_where_column_to_const(colOrgSerial, dal.OPTYPE.Equal, org_item.serial)
-
-                author_idx_restrict = None
-
-                if final_select_orgs.author_index == AuthorIndex.FirstAuthor:
-                    author_idx_restrict = dal.create_where_column_to_const(colAORAuthorIdx,dal.OPTYPE.Equal,"1")
-                elif final_select_orgs.author_index == AuthorIndex.Reprint:
-                    author_idx_restrict = dal.create_where_column_to_const(colAORReprint,dal.OPTYPE.Equal,"1")
-                elif final_select_orgs.author_index == AuthorIndex.FirstOrReprint:
-                    author_idx_restrict1 = dal.create_where_column_to_const(colAORAuthorIdx,dal.OPTYPE.Equal,"1")
-                    author_idx_restrict2 = dal.create_where_column_to_const(colAORReprint,dal.OPTYPE.Equal,"1")
-                    author_idx_restrict = dal.create_where_multiple([author_idx_restrict1, author_idx_restrict2],dal.OPTYPE.Or)
-                if author_idx_restrict:
-                    restrict_org= dal.create_where_multiple([restrict_org, author_idx_restrict],dal.OPTYPE.And)
-                query = dal.create_where_column_val_in_join_table_column_multiple([colBind, colAddrIdx, colRp ],[ colOrgBind, colOrgAddrIdx, colOrgReprint ], jtb, restrict_org)
-                ret.Add(self.get_org_name(org).replace("'", "''"), [ query ])
-
+                    if org_item.serial in concat_list:
+                        for year_key in concat_list[org_item.serial].keys():
+                            if year_key == "1900_2300":
+                                added = True
+                            ret_add(ret, org_item, year_key)
+                if not added:
+                    ret_add(ret, org_item)
+                
         return  ret, {db_schema.schema.MainBindColumnName: colBind,  db_schema.schema.AddrIndexColumnName:colAddrIdx , db_schema.schema.ReprintColumnName: colRp },final_select_orgs, "機構", "Organization"
-        
 
     @staticmethod
-    def get_org_name(org:PaperOrgSelectItem) -> str:
+    def get_org_key(org_serial:str, extra:str) -> str:
         #return org.raw_serial + "-" + org.org_name
         # PresidentReportOrgSubjectInfo
-        return f"{org.raw_serial}\x1c{org.org_name_ch}\x1c{org.org_name_en}"
+        return f"{org_serial}_{extra}"
 
 
 class PaperJcrIFSubjectInfo:
@@ -567,3 +588,4 @@ class PaperJcrIFSubjectInfo:
         }
 
         return subj, res_dict
+    

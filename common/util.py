@@ -1,4 +1,5 @@
 import pandas as pd
+from config import *
 
 # PRISUtilityKit.DBAL.Lib.Utils.Delimiter
 DELIMITER = "\x1c"
@@ -163,7 +164,7 @@ def convert_type(text_value):
         return text_value
 
 @staticmethod
-def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int = 0) -> list[str]:
+def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int = 0, year_range:int = YEAR_RANGE, year_repeat:int = YEAR_REPEAT) -> list[str]:
     if year_list:
         int_years = [int(x) for x in year_list]
         min_y = min(int_years)
@@ -173,8 +174,8 @@ def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int 
     stop_y = max_y
     select_years = []
 
-    while (start_y + 2) <= stop_y:
-        end_y = start_y + 3 - 1
+    while (start_y + year_repeat) <= stop_y:
+        end_y = start_y + year_range - 1
         select_years.append(f"{start_y}-{end_y}")
         start_y = start_y+1
 
@@ -196,3 +197,12 @@ def get_num_ch(i) -> str:
         ret += f"{num_ch_list[(i % 10) - 1]}"
 
     return ret
+
+def org_serial_code_type(org_serial:str):
+    if org_serial[9:11] == "00":
+        return org_serial[:9] + "%"
+    if org_serial[11:13] == "00":
+        return org_serial[:11] + "%"
+    if org_serial[13:15] == "00":
+        return org_serial[:13] + "%"
+    return org_serial

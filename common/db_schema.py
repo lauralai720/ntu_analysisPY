@@ -112,6 +112,7 @@ class WOSSchema(DBSchema):
     CountrySerialColumnName = "CountrySerial"
     CountryNameENColumnName = "CountryName_EN"
     TitleNameColumnName = "Title"
+    OrgMerge = "AC_Manager.dbo.OrgMerge"
 
     WOSOrgSubjectInfo = None
     PaperJrcSubjectInfo = None

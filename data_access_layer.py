@@ -27,15 +27,14 @@ class DataAccessLayer:
     def _setup_dll_references(self):
         """集中管理所有 clr.AddReference,新增 DLL 時只需要改這裡"""
         import sys
-
         import clr
 
         if str(DLL_DIR) not in sys.path:
             sys.path.append(str(DLL_DIR))
 
-        #clr.AddReference("System")  # 確保基礎 System 核心有被載入
         clr.AddReference("System.Data")
         clr.AddReference("PRISUtilityKit")  # 依實際 DLL 檔名調整
+        clr.AddReference("MyPRISUtilityKit")  # 依實際 DLL 檔名調整
 
         from PRISUtilityKit.DBAL.Cls import JoinType as DllJoinType, OpType as DllOpType
         
@@ -188,11 +187,7 @@ class DataAccessLayer:
         return Bind(*args, **kwargs)
 
     def create_extra_column_table(self, *args, **kwargs):
-        from PRISUtilityKit.DBAL.Cls import ExtraColumnTable
-        return ExtraColumnTable(*args, **kwargs)
-
-    def create_extra_column_table(self, *args, **kwargs):
-        from PRISUtilityKit.DBAL.Cls import ExtraColumnTable
+        from MyPRISUtilityKit.Bridge import ExtraColumnTable
         return ExtraColumnTable(*args, **kwargs)
     
     def create_year_subject(self, *args, **kwargs):
@@ -269,6 +264,12 @@ class DataAccessLayer:
         from PRISUtilityKit.DBAL.Module import A08_CntAvg
         dt = self._dataframe_to_datatable(df = df)
         dt = A08_CntAvg.Calculate(dt, decimals)
+        return self.datatable_to_dataframe(dt, dtype_map)
+
+    def b06_h_index_calculate(self, df : pd.DataFrame, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
+        from PRISUtilityKit.DBAL.Module import B06_H_Index
+        dt = self._dataframe_to_datatable(df = df)
+        dt = B06_H_Index.Calculate(dt)
         return self.datatable_to_dataframe(dt, dtype_map)
 
     def a08_cntavg_calculate_join(self, df_1 : pd.DataFrame,df_2 : pd.DataFrame, decimals:int = -1, dtype_map: dict[str, str] | None = None) -> pd.DataFrame:
