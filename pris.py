@@ -285,7 +285,7 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
         raise PRISError("找不到Sheet標題.")
 
     target_name = TargetSheetHeader[wos_target]
-    if wos_target == WOSTarget.Internal : 
+    if wos_target == WOSTarget.Internal or wos_target == WOSTarget.InternalResearch: 
         target_name = target_name.format(Util.get_num_ch(len(org_ids)))
     
     ## 年份
