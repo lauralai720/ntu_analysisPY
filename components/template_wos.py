@@ -145,11 +145,13 @@ class S1(Template_WOS):
                 str_format ="=TEXT({0},\"#,##0\")&CHAR(10)&\"(\"&TEXT({1},\"0.00%\")&\")\""
                 str_format_empty = self.DefaultExcelFuncInteger
                 if f"{r},{origial_c+1}" in self.null_val_loc:
-                    ECell(
-                        text=str_format_empty.format(self.get_cell_loc_str(r,origial_c)), 
-                        vertical_align=self.DefaultCellVerticalAlignment,
-                        horizontal_align=self.DefaultCellHorizontalAlignment,
-                        is_formula= True
+                    r_cells.append(
+                        ECell(
+                            text=str_format_empty.format(self.get_cell_loc_str(r,origial_c)), 
+                            vertical_align=self.DefaultCellVerticalAlignment,
+                            horizontal_align=self.DefaultCellHorizontalAlignment,
+                            is_formula= True
+                        )
                     )
                 else:
                     r_cells.append(
