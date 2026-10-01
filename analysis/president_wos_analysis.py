@@ -25,10 +25,11 @@ from exceptions import PRISError
 from analysis.president_esi_analysis import Anaysis,ResettableLazy
 
 class WOSTarget(Enum):
-    Internal = 1
+    InternalResearch = 1
     NTUCollege = 2
     NTUCollegeAndDepartment = 3
-    AsiaPacific = 4
+    Internal = 4
+    AsiaPacific = 5
 
 ## [ TabName(分頁標題), SheetName(表格標題)]，非list的就是一樣的
 TemplateNameMapping = {
@@ -45,9 +46,10 @@ TemplateNameMapping = {
 
 
 TargetSheetHeader = {
-    WOSTarget.Internal : "國內{0}所研究型大學",
+    WOSTarget.InternalResearch : "國內{0}所研究型大學",
     WOSTarget.NTUCollege: "臺灣大學各學院",
     WOSTarget.NTUCollegeAndDepartment : "臺灣大學x各學院系所",
+    WOSTarget.Internal : "國內{0}所大學",
     WOSTarget.AsiaPacific : "亞太代表性大學"
 }
 
@@ -554,20 +556,12 @@ class PresidentWOSAnalysis(Anaysis):
                     org_key = merge_key[y]
                 else:
                     org_key = org
+
                 cnt = self.paper_count.get(org_key,{}).get(y, 0)
                 gr = self.growth_rate_without_year.get(org_key,{}).get(y, "")
                 res_org_val.extend([str(cnt),str(gr)])
             temp_rows.append(res_org_val)
 
-            # org_paper_count = self.paper_count.get(org,{})
-            # growth_rate_per_year = self.growth_rate_without_year.get(org,{})
-            # res_org_val = []
-            # for y in self.years:
-            #     cnt = org_paper_count.get(y, 0)
-            #     gr = growth_rate_per_year.get(y, "")
-            #     res_org_val.extend([str(cnt),str(gr)])
-
-            # temp_rows.append(res_org_val)  # 直接新增到傳進來的 temp_rows
         return self._build_rows(compute)
 
     def get_s2_rows(self):
