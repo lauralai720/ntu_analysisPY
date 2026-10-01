@@ -127,8 +127,8 @@ class WOSPaperOrgSubjectInfo:
     def __init__(self, selected_values: list[str]):
         self.orgs_selected_list:list[PaperOrg] = []
         self.order_orgs_selected_list:list[PaperOrg] = []
-        self.orgs_1st_list: list[PaperOrg] = []
-        self.orgs_2nd_list: list[PaperOrg] = []
+        #self.orgs_1st_list: list[PaperOrg] = []
+        #self.orgs_2nd_list: list[PaperOrg] = []
         self._fetch_all_orgs(selected_values)
 
     def _fetch_all_orgs(self, selected_values: list[str]):
@@ -137,12 +137,11 @@ class WOSPaperOrgSubjectInfo:
         orgs_1st = []
         orgs_2nd = []
         org_like = None
-        sort : bool = False
+        
 
         if len(selected_values) == 1 and len(selected_values[0]) == 9:
             # 一級機構
             org_like = selected_values[0]
-            sort = True
         else:
             for x in selected_values:
                 if len(x) <= 9:
@@ -150,8 +149,6 @@ class WOSPaperOrgSubjectInfo:
                 else:
                     orgs_2nd.append(x)
 
-            if orgs_2nd:
-                sort = True
 
         cmd_orgs_1st_clause = None
         if org_like:
@@ -179,11 +176,11 @@ class WOSPaperOrgSubjectInfo:
                 f"WHERE {db_schema.schema.OrgSerialColumnName} {cmd_orgs_1st_clause} "
             )
             orgs_1st_list = dal.query_2d_raw(cmd_1st_str)
-            for org1 in orgs_1st_list:
-                #self.orgs_selected_list.append(PaperOrg(org1[0],org1[1],org1[2]))
-                org_item = PaperOrg(org1[0],org1[1],org1[2])
-                self.add_paper_org(self.orgs_selected_list, org_item)
-                self.add_paper_org(self.orgs_1st_list, org_item)
+            # for org1 in orgs_1st_list:
+            #     #self.orgs_selected_list.append(PaperOrg(org1[0],org1[1],org1[2]))
+            #     org_item = PaperOrg(org1[0],org1[1],org1[2])
+            #     self.add_paper_org(self.orgs_selected_list, org_item)
+            #     #self.add_paper_org(self.orgs_1st_list, org_item)
 
         cmd_orgs_2nd_clause = None
         if org_like:
@@ -223,10 +220,30 @@ class WOSPaperOrgSubjectInfo:
             )
             orgs_2nd_list = dal.query_2d_raw(cmd_2nd_str)
 
-            for org2 in orgs_2nd_list:
-                org_item = PaperOrg2nd(org2[0],org2[1],org2[2],org2[3],org2[4],org2[5],org2[6],org2[7],org2[8])
-                self.add_paper_org(self.orgs_selected_list, org_item)
-                self.add_paper_org(self.orgs_2nd_list, org_item)
+            # for org2 in orgs_2nd_list:
+            #     org_item = PaperOrg2nd(org2[0],org2[1],org2[2],org2[3],org2[4],org2[5],org2[6],org2[7],org2[8])
+            #     self.add_paper_org(self.orgs_selected_list, org_item)
+            #     #self.add_paper_org(self.orgs_2nd_list, org_item)
+
+            if org_like:
+                for org1 in orgs_1st_list:    
+                    org_item = PaperOrg(org1[0],org1[1],org1[2])
+                    self.add_paper_org(self.orgs_selected_list, org_item)
+                for org2 in orgs_2nd_list:
+                    org_item = PaperOrg2nd(org2[0],org2[1],org2[2],org2[3],org2[4],org2[5],org2[6],org2[7],org2[8])
+                    self.add_paper_org(self.orgs_selected_list, org_item)
+            else:
+                for val in selected_values:
+                    if len(val) <= 9:
+                        org1 = next((x for x in orgs_1st_list if x[0] == val), None)
+                        if org1 is not None:
+                            org_item = PaperOrg(org1[0],org1[1],org1[2])
+                            self.add_paper_org(self.orgs_selected_list, org_item)
+                    else:
+                        org2 = next((x for x in orgs_2nd_list if x[0] == val), None)
+                        if org2 is not None:
+                            org_item = PaperOrg2nd(org2[0],org2[1],org2[2],org2[3],org2[4],org2[5],org2[6],org2[7],org2[8])
+                            self.add_paper_org(self.orgs_selected_list, org_item)
 
             # sort
             # if sort:
