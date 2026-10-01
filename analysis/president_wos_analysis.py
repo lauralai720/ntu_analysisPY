@@ -282,7 +282,7 @@ class PresidentWOSAnalysis(Anaysis):
                 col_src_db = tbl.RetrieveColumn(db_schema.schema.SourceDBColumnName)
 
             where = dal.create_where_operated_column_to_const(
-                col_src_db, dal.OPTYPE.BitwiseAnd, "1", dal.OPTYPE.NotEqual, "0"
+                col_src_db, dal.OPTYPE.BitwiseAnd, "2", dal.OPTYPE.NotEqual, "0"
             )
             return [where]
         m.get_where_clauses = get_where_clauses
