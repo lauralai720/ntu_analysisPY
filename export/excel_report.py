@@ -98,7 +98,7 @@ class ExcelReport():
             #ws.row_dimensions[cell.column_letter].height = header.height
             ws.row_dimensions[d].height = header.height
         if header.is_formula:
-            cell.value = f"={header.name}"
+            cell.value = header.name if header.name.startswith("=") else f"={header.name}"
         else:
             cell.value = header.name
 
@@ -148,7 +148,7 @@ class ExcelReport():
 
 
                 if col.is_formula and col.text: #如果是空字串就不用轉換成公式了
-                    cell.value = f"={col.text}"
+                    cell.value = col.text if col.text.startswith("=") else f"={col.text}"
                 elif isinstance(cell, MergedCell) == False:
                     cell.value = convert_type(col.text)
                     #cell.value = col.text
