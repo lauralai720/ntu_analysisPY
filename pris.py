@@ -420,7 +420,7 @@ def insert_integrate_data(db_name:str):
         f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001127999' AS Orgname,[Country],[Reprint]"
         f"FROM {db_schema.schema.Org2ndTableName} "
         "WHERE ([OrgName] LIKE N'TWU000001127%' or [OrgName] LIKE N'TWU0000011254%' or [OrgName] LIKE N'TWU0000011291%') "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001127999' )"
+        f"AND ISI_ID NOT IN (SELECT ISI_ID FROM {db_schema.schema.Org2ndTableName} WHERE [WOS_ORG_2nd].[Orgname] ='TWU000001127999' )"
     )
     dal.do_no_query(cmd5)
 
