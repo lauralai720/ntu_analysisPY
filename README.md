@@ -10,6 +10,11 @@ run_report(**kwargs):</br>
 呼叫參數請看底下的參數說明
 </br>
 
+**產出WOS報表前請先執行**</br>
+from pris import insert_integrate_data </br>
+insert_integrate_data(db_name:str):</br>
+</br>
+</br>
 
 **參數說明**
 - 通用參數
