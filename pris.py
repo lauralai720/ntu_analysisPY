@@ -372,6 +372,15 @@ def run_report(**kwargs):
         rprint("[red]分析項目目前只有校長報表ESI/WOS,程式結束。[/red]")
         raise PRISError(f"分析項目目前只有校長報表ESI/WOS，receive type:{analysis_type}")
 
+# 為了報表整併的ID
+integrate_list : dict[str, dict[str, list[str]]] = {
+    "TWU000001992127" : {"like" : ["TWU0000012%"], "excluded":["TWU000001220200","TWU000001230300"]},
+    "TWU000001992124" : {"like" : ["TWU00000121%", "TWU00000122%", "TWU00000123%", "TWU00000124%"]},
+    "TWU000001992527" : {"like" : ["TWU00000121%", "TWU00000125%", "TWU00000126%", "TWU00000127%"]},
+    "TWU000001129100" : {"like" : ["TWU0000011291%"]},
+    "TWU000001127999" : {"like" : ["TWU000001127%", "TWU0000011254%", "TWU0000011291%"]},
+}
+
 # 需要整併的資料，在出WOS報表前請先insert
 def insert_integrate_data(db_name:str):
     dal = get_dal()
@@ -385,46 +394,30 @@ def insert_integrate_data(db_name:str):
     db_schema.schema = db_schema.WOSSchema()
     db_schema.schema.set_DB_name(db_name)
 
-    cmd1 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001992127' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE 'TWU0000012%' and [OrgName] NOT IN ('TWU000001220200','TWU000001230300')) "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001992127' )"
-    )
-    dal.do_no_query(cmd1)
+    for key, data in integrate_list.items():
+        rprint(f"[white]處理 {key} 的insert[/white]")
+        cmd = f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'{key}' AS Orgname,[Country],[Reprint] FROM {db_schema.schema.Org2ndTableName} "
 
-    cmd2 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001992124' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE 'TWU00000121%' OR [OrgName]  LIKE 'TWU00000122%' OR [OrgName]  LIKE 'TWU00000123%' OR [OrgName]  LIKE 'TWU00000124%') "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001992124' )"
-    )
-    dal.do_no_query(cmd2)
+        like_list = data.get("like", [])
+        if like_list:
+            like_str = " OR ".join([f"[OrgName] LIKE N'{like_o}'" for like_o in like_list])
+            if key == "TWU000001992127":
+                excluded_ids = data.get("excluded", [])
+                if excluded_ids:
+                    excluded_str = ",".join([f"'{exclude_o}'" for exclude_o in excluded_ids])
+                    cmd += f"WHERE ({like_str} and [OrgName] NOT IN ({excluded_str})) "
+            else:
+                cmd += f"WHERE ({like_str}) "
 
-    cmd3 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001992527' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE 'TWU00000121%' OR [OrgName]  LIKE 'TWU00000125%' OR [OrgName]  LIKE 'TWU00000126%' OR [OrgName]  LIKE 'TWU00000127%') "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001992527' )"
-    )
-    dal.do_no_query(cmd3)
-
-    cmd4 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001129100' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} WHERE ([OrgName] LIKE N'TWU0000011291%') "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001129100' )"
-    )
-    dal.do_no_query(cmd4)
-
-    cmd5 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001127999' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE N'TWU000001127%' or [OrgName] LIKE N'TWU0000011254%' or [OrgName] LIKE N'TWU0000011291%') "
-        f"AND ISI_ID NOT IN (SELECT ISI_ID FROM {db_schema.schema.Org2ndTableName} WHERE [WOS_ORG_2nd].[Orgname] ='TWU000001127999' )"
-    )
-    dal.do_no_query(cmd5)
-
+        if key == "TWU000001127999" :
+            cmd += f"AND ISI_ID NOT IN (SELECT ISI_ID FROM {db_schema.schema.Org2ndTableName} WHERE  [WOS_ORG_2nd].[Orgname] ='{key}' )"
+        else:
+            cmd += f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='{key}' )"
+        #print(cmd)
+        dal.do_no_query(cmd)
+        rprint(f"[white]{key} 的insert處理完畢。[/white]")
+    
     rprint("[green]前置作業，insert完成。[/green]")
 
-# if __name__ == "__main__":
-#     insert_integrate_data("PRIS_WOS_校長報表_202604_2015_2025_260423")
+if __name__ == "__main__":
+    insert_integrate_data("PRIS_WOS_校長報表_202604_2015_2025_260423")
