@@ -10,12 +10,13 @@ from dal_provider import get_dal
 # PRIS
 from analysis.president_esi_analysis import *
 from analysis.president_wos_analysis import *
-from analysis.analysis_type import AnalysisItemType
-from components.year_selector import YearSelector, ESIYearSelector,ESIYearStyle, WOSYearSelector
-from components.subject_info import *
+from components import YearSelector,ESIYearSelector,ESIYearStyle, WOSYearSelector,ESIInstitutionSubjectInfo,ESIFieldSubjectInfo,WOSPaperOrgSubjectInfo
 import common.db_schema as db_schema
 import common.util as Util
 from exceptions import PRISError
+from database import SQLExecute, DB
+
+dal = get_dal()   # [整理] 原本 run_president_esi_report / insert_integrate_data 用到 dal,卻沒有在本檔宣告(靠 import * 連帶帶入)
 
 
 regReportTableName = "AC_Manager.dbo.RegReportTest" if DEBUG else "AC_Manager.dbo.RegReport"
@@ -46,7 +47,7 @@ def load_fields(rid) -> tuple[bool, list[str] | None]:
     strCmd = f"SELECT DISTINCT FID FROM {regReportFieldTableName} WHERE RID = '{rid}' ORDER BY FID"
     res = dal.query_2d_raw(strCmd)
     
-    return True,[r[0] for r in res]
+    return True,[str(r[0]) for r in res]
     
 ## load 報表及類型
 def load_reports(rid) -> tuple[bool, PresidentESIReport | None]:
@@ -55,7 +56,7 @@ def load_reports(rid) -> tuple[bool, PresidentESIReport | None]:
     dal = get_dal()
     print(f"start loadReport : {rid}")
     strCmd = f"SELECT DISTINCT table_setting FROM {regReportReportTableName} WHERE RID = '{rid}'"
-    report_rows = dal.query_2d_raw(strCmd) # PRISUtilityKit.DBAL.Cls dll
+    report_rows = dal.query_2d_raw(strCmd)
 
     report = PresidentESIReport()
     report_items : list[tuple[int, PresidentESIReportItem]] = []
@@ -204,7 +205,7 @@ def run_president_esi_report(model_id:int, main_version: str, compare_version: s
 
     if fields is not None:
         print(f"{project_name} 中的 領域列表 : ")
-        fields_name = "、".join(x for x in fields)
+        fields_name = "、".join(str(x) for x in fields)
         print(f"{fields_name}")
 
     if esi_report is not None:
@@ -246,6 +247,24 @@ def run_president_esi_report(model_id:int, main_version: str, compare_version: s
 
         return export_file_path
 
+# 為了報表整併的ID
+integrate_list : dict[str, dict[str, list[str]]] = {
+    "TWU000001992127" : {"like" : ["TWU0000012%"], "excluded":["TWU000001220200","TWU000001230300"]},
+    "TWU000001992124" : {"like" : ["TWU00000121%", "TWU00000122%", "TWU00000123%", "TWU00000124%"]},
+    "TWU000001992527" : {"like" : ["TWU00000121%", "TWU00000125%", "TWU00000126%", "TWU00000127%"]},
+    "TWU000001129100" : {"like" : ["TWU0000011291%"]},
+    "TWU000001127999" : {"like" : ["TWU000001127%", "TWU0000011254%", "TWU0000011291%"]},
+}
+
+def check_wos_integrate_exist() -> bool:
+    for key in integrate_list.keys():
+        query_cmd = f"SELECT CASE WHEN EXISTS (SELECT 1 FROM {db_schema.schema.Org2ndTableName} WHERE [WOS_ORG_2nd].[Orgname] ='{key}') THEN 1 ELSE 0 END AS [Exists]"
+        exist = SQLExecute.do_exist_query(query_cmd)
+        if not exist: 
+            return False
+    return True
+
+
 def create_wos_report(file_name:str, template_types : list[int], target_name:str, year_format:str, source_name:str, mix_year:int, max_year:int) -> PresidentWOSReport:
     report = PresidentWOSReport()
     report.project_name = file_name
@@ -274,10 +293,17 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
     db_schema.schema = db_schema.WOSSchema()
     db_schema.schema.set_DB_name(db_name)
     rprint(f"[green]設定DB名稱 : {db_schema.schema.DBName}[/green]")
+
+    if not org_ids:
+        raise PRISError("沒有輸入機構列表，無法分析")
     
     ## 機構
-    if org_ids is not None:
-        print(f"輸入機構數量 : {len(org_ids)}")
+    print(f"輸入機構數量 : {len(org_ids)}")
+
+    if len(org_ids) == 1 and org_ids[0] == "TWU000001":
+        ## 要抓台大院系級的再來檢查
+        if not check_wos_integrate_exist():
+            raise PRISError(f"資料庫沒有整併的資料，請確認是否有執行整併的insert。")
 
     wos_target = WOSTarget(int(target))
     ## check Sheet標題
@@ -295,6 +321,8 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
     Template_WOS.set_year_list(year_list)
 
     years = [int(x) for x in year_list if x]
+    if not years:
+        raise PRISError("年份列表不得為空")
 
     ## 報表
     report = create_wos_report(file_name, template_types, target_name, year_format, source_name, min(years), max(years))
@@ -307,7 +335,6 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
     ## 生成一個可以用的subjects
     all_subjs = get_subjects(subj1_selected=org_ids, subj2_selected=None, year_selector=year_selector, subj1_obj=subj1_subjinfo, subj2_obj=subj2_subjinfo)
     
-
     wos_analysis = PresidentWOSAnalysis()
     wos_analysis.subjects = all_subjs
     wos_analysis.get_where_clauses = lambda table:None # 因為現階段都回傳null，所以暫時給一個方法可以被執行
@@ -326,24 +353,15 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
 ANALYSIS_KEY = "analysis_type"
 
 def run_report(**kwargs):
-#def run_report(analysis_type: int, model_id:int, main_version: str, comp_version: str, output_path: str = "./output//"):
-    
-    # 第一次呼叫 get_dal(),這裡才會真正初始化 .NET runtime、載入 DLL
-    dal = get_dal()
 
-    # 設定連線(整個程式只需要做一次)
-    #success = dal.set_connection("140.112.180.160","Lis_User","5566server^.<")
-    success = dal.set_connection(DEFAULT_DB_IP, DEFAULT_DB_USER, DEFAULT_DB_PW)
-    if not success:
-        rprint("[red]連線設定失敗[/red]")
-        raise PRISError("DB連線設定失敗")
-    
-    rprint("[green]DB連線設定成功[/green]")
+    db_conn_success = DB.set_connection(DEFAULT_DB_IP, DEFAULT_DB_USER, DEFAULT_DB_PW)
+    if not db_conn_success:
+        rprint("[red]PY DB連線設定失敗[/red]")
+        raise PRISError("PY DB連線設定失敗")
 
     if ANALYSIS_KEY not in kwargs :
         rprint("[red]沒有輸入分析項目,程式結束。[/red]")
         raise PRISError(f"沒有輸入分析項目")
-        analysis_type = AnalysisItemType(analysis_type)
 
     analysis_type = AnalysisItemType(int(kwargs[ANALYSIS_KEY]))
     
@@ -355,75 +373,58 @@ def run_report(**kwargs):
         output_path = kwargs["output_path"]
 
     # 先判斷路徑是否存在，不存在生成一個資料夾
-    if os.path.isdir(output_path):
-        rprint("[green]資料夾存在，可以安全存檔！[/green]")
-    else:
-        rprint(f"[blue]資料夾不存在，建立資料夾: {output_path}[/blue]")
-        os.makedirs(output_path)
-        rprint(f"[green]已建立資料夾：{output_path}[/green]")
+    os.makedirs(output_path, exist_ok=True)      # [整理] 避免 isdir 與 makedirs 之間的競態
 
-    if analysis_type == AnalysisItemType.PaperPresidentReportESI:
-        
-        return run_president_esi_report(**kwargs)
-    elif analysis_type == AnalysisItemType.PaperPresidentReport:
-        
-        return run_president_wos_report(**kwargs)
-    else:
-        rprint("[red]分析項目目前只有校長報表ESI/WOS,程式結束。[/red]")
-        raise PRISError(f"分析項目目前只有校長報表ESI/WOS，receive type:{analysis_type}")
+    try:
+        if analysis_type == AnalysisItemType.PaperPresidentReportESI:
+            return run_president_esi_report(**kwargs)
+        elif analysis_type == AnalysisItemType.PaperPresidentReport:
+            return run_president_wos_report(**kwargs)
+        else:
+            rprint("[red]分析項目目前只有校長報表ESI/WOS,程式結束。[/red]")
+            raise PRISError(f"分析項目目前只有校長報表ESI/WOS，receive type:{analysis_type}")
+    finally:
+        # [優化] 報表結束(成功或失敗)就清掉本次建立的 #暫存表,避免連線存活期間 tempdb 持續累積
+        SQLExecute.drop_temp_tables()
+
+
 
 # 需要整併的資料，在出WOS報表前請先insert
 def insert_integrate_data(db_name:str):
-    dal = get_dal()
-    success = dal.set_connection(DEFAULT_DB_IP, DEFAULT_DB_USER, DEFAULT_DB_PW)
-    if not success:
-        rprint("[red]連線設定失敗[/red]")
-        raise PRISError("DB連線設定失敗")
+
+    db_conn_success = DB.set_connection(DEFAULT_DB_IP, DEFAULT_DB_USER, DEFAULT_DB_PW)
+    if not db_conn_success:
+        rprint("[red]PY DB連線設定失敗[/red]")
+        raise PRISError("PY DB連線設定失敗")
     
     rprint("[green]DB連線設定成功[/green]")
 
     db_schema.schema = db_schema.WOSSchema()
     db_schema.schema.set_DB_name(db_name)
 
-    cmd1 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001992127' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE 'TWU0000012%' and [OrgName] NOT IN ('TWU000001220200','TWU000001230300')) "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001992127' )"
-    )
-    dal.do_no_query(cmd1)
+    for key, data in integrate_list.items():
+        rprint(f"[white]處理 {key} 的insert[/white]")
+        cmd = f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'{key}' AS Orgname,[Country],[Reprint] FROM {db_schema.schema.Org2ndTableName} "
 
-    cmd2 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001992124' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE 'TWU00000121%' OR [OrgName]  LIKE 'TWU00000122%' OR [OrgName]  LIKE 'TWU00000123%' OR [OrgName]  LIKE 'TWU00000124%') "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001992124' )"
-    )
-    dal.do_no_query(cmd2)
+        like_list = data.get("like", [])
+        if like_list:
+            like_str = " OR ".join([f"[OrgName] LIKE N'{like_o}'" for like_o in like_list])
+            if key == "TWU000001992127":
+                excluded_ids = data.get("excluded", [])
+                if excluded_ids:
+                    excluded_str = ",".join([f"'{exclude_o}'" for exclude_o in excluded_ids])
+                    cmd += f"WHERE ({like_str} and [OrgName] NOT IN ({excluded_str})) "
+            else:
+                cmd += f"WHERE ({like_str}) "
 
-    cmd3 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001992527' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE 'TWU00000121%' OR [OrgName]  LIKE 'TWU00000125%' OR [OrgName]  LIKE 'TWU00000126%' OR [OrgName]  LIKE 'TWU00000127%') "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001992527' )"
-    )
-    dal.do_no_query(cmd3)
-
-    cmd4 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001129100' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} WHERE ([OrgName] LIKE N'TWU0000011291%') "
-        f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='TWU000001129100' )"
-    )
-    dal.do_no_query(cmd4)
-
-    cmd5 = (
-        f"INSERT INTO {db_schema.schema.Org2ndTableName} SELECT DISTINCT [ISI_ID],[AddressIndex],'TWU000001127999' AS Orgname,[Country],[Reprint]"
-        f"FROM {db_schema.schema.Org2ndTableName} "
-        "WHERE ([OrgName] LIKE N'TWU000001127%' or [OrgName] LIKE N'TWU0000011254%' or [OrgName] LIKE N'TWU0000011291%') "
-        f"AND ISI_ID NOT IN (SELECT ISI_ID FROM {db_schema.schema.Org2ndTableName} WHERE [WOS_ORG_2nd].[Orgname] ='TWU000001127999' )"
-    )
-    dal.do_no_query(cmd5)
-
+        if key == "TWU000001127999" :
+            cmd += f"AND ISI_ID NOT IN (SELECT ISI_ID FROM {db_schema.schema.Org2ndTableName} WHERE  [WOS_ORG_2nd].[Orgname] ='{key}' )"
+        else:
+            cmd += f"AND NOT EXISTS (SELECT * FROM {db_schema.schema.Org2ndTableName} WHERE [ISI_ID] = [WOS_ORG_2nd].[ISI_ID] AND [WOS_ORG_2nd].[Orgname] ='{key}' )"
+        #print(cmd)
+        dal.do_no_query(cmd)
+        rprint(f"[white]{key} 的insert處理完畢。[/white]")
+    
     rprint("[green]前置作業，insert完成。[/green]")
 
 # if __name__ == "__main__":

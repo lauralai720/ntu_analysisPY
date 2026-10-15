@@ -7,20 +7,19 @@ from pathlib import Path
 import pandas as pd
 from collections import defaultdict
 
-
 # PRIS DLL
 from dal_provider import get_dal
-
+from config import DEBUG
 import common.db_schema as db_schema
 import common.util as Util
-from components.subjects import Subjects
-from components.template import *
+import analysis.data_analysis as DataAnalysis
+from components import *
 from components.template_esi import *
+from database import *
 from export.report_exporter import *
-from export.output_tab import *
 from analysis.metrics import ESIMetrics
-from components.esi_field import * 
 from exceptions import PRISError
+
 
 script_dir = Path(__file__).parent.parent
 dal = get_dal()
@@ -43,13 +42,6 @@ def try_parse_float(string_val)-> tuple[bool, float]:
         # 失敗（例如字串是 "abc" 或 None），回傳 (False, 預設值 0.0)
         return False, 0.0
 
-
-@dataclass
-class OrgInfo:
-    org_serial: str
-    country: str
-    org_name_ch: str
-    org_name_en: str
 
 class IResettable(ABC):
     reset_request_time: Optional[datetime] = None  # 對應 static DateTime,所有子類別共用
@@ -237,10 +229,10 @@ class PresidentESIAnalysis(Anaysis):
         return self._sub_fields_subj.value
     
     @property
-    def org_infos(self) -> dict[str, OrgInfo]:
+    def org_infos(self) -> dict[str,PaperOrg]:
         return self._org_infos.value
     @property
-    def selected_orgs(self) -> list[OrgInfo]:
+    def selected_orgs(self) -> list[PaperOrg]:
         return self._selected_orgs.value
     @property
     def maj_field_id_to_name(self) -> dict[str,str]:
@@ -344,22 +336,22 @@ class PresidentESIAnalysis(Anaysis):
         return ESIFieldValueInfo(query_list=q_res)
 
     ## done! 20260814
-    def _fetch_get_org_infos(self) -> dict[str,OrgInfo]:
+    def _fetch_get_org_infos(self) -> dict[str,PaperOrg]:
         ## """對應原本要抓取 selectedOrgs 資料的邏輯,只有第一次讀取才會被呼叫"""
         str_cmd = (
             f"SELECT {db_schema.schema.OrgSerialColumnName}, {db_schema.schema.OrgNameENColumnName}, {db_schema.schema.OrgNameCHColumnName}, {db_schema.schema.CountryNameCHColumnName} "
             f"FROM {db_schema.schema.OrgFirstTableName} Org INNER JOIN {db_schema.schema.NationTableName} Nation ON Org.{db_schema.schema.CountryColumnName} = Nation.{db_schema.schema.CountryNameENColumnName}"
         )
-        res_dict: dict[str, OrgInfo] = {}
+        res_dict: dict[str, PaperOrg] = {}
         org_rows = dal.query_2d_raw(str_cmd)
         for row in org_rows:
-            new_org = OrgInfo(row[0], row[3], row[2], row[1])
+            new_org = PaperOrg(org_serial=row[0], name_ch=row[2], name_en=row[1], country=row[3])
             res_dict[row[0]] = new_org
 
         return res_dict
 
     ## done! 20260814
-    def _fetch_get_orgs(self) -> list[OrgInfo]:
+    def _fetch_get_orgs(self) -> list[PaperOrg]:
         ## """對應原本要抓取 selectedOrgs 資料的邏輯,只有第一次讀取才會被呼叫"""
         return [self.org_infos[x] for x in self.selected_orgs_str]
 
@@ -419,8 +411,8 @@ class PresidentESIAnalysis(Anaysis):
         query_res = dal.query_2d_raw(cmd_str)
         res_dict = defaultdict(list)
         for x in query_res:
-            fid = x[0]
-            esi = x[1]
+            fid = str(x[0])
+            esi = str(x[1])
 
             if fid in fields:
                 res_dict[fid].append(esi)
@@ -575,7 +567,8 @@ class PresidentESIAnalysis(Anaysis):
 #            .ToDictionary(k => k.Key, v => v.OrderBy(x => x.Rank).Select(x => x.Serial).ToList());
         groups = defaultdict(list)
         for x in query_res:
-            groups[x[0]].append({"ESI": x[0], "Serial": x[1], "Rank": x[2]})
+            field = str(x[0])
+            groups[field].append({"ESI": field, "Serial": x[1], "Rank": x[2]})
 
         res = {
             key: [item["Serial"] for item in sorted(group, key=lambda item: item["Rank"])]
@@ -661,14 +654,14 @@ class PresidentESIAnalysis(Anaysis):
             item = {
                 "OrgSerial": so.org_serial,
                 "Country": so.country,
-                "NameCH": so.org_name_ch,
-                "NameEN": so.org_name_en,
-                "Count_MainVer": try_get(self.paper_count_all_fields, so.org_serial, self.main_ver_short),#self.paper_count_all_fields.get(so.org_serial, {}).get("1",{}).get(self.main_ver_short,""),
-                "WorldRank_MainVer" : try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.main_ver_short),#self.paper_count_world_rank_all_fields.get(so.org_serial, {}).get("1",{}).get(self.main_ver_short,""),
-                "AsiaRank_MainVer" : try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.main_ver_short),#self.paper_count_asiap_rank_all_fields.get(so.org_serial, {}).get("1",{}).get(self.main_ver_short,""),
-                "Count_CompVer" : try_get(self.paper_count_all_fields, so.org_serial, self.comp_ver_short),#self.paper_count_all_fields.get(so.org_serial, {}).get("1",{}).get(self.comp_ver_short,""),
-                "WorldRank_CompVer":try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.comp_ver_short),#self.paper_count_world_rank_all_fields.get(so.org_serial, {}).get("1",{}).get(self.comp_ver_short,""),
-                "AsiaRank_CompVer":try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.comp_ver_short),#self.paper_count_asiap_rank_all_fields.get(so.org_serial, {}).get("1",{}).get(self.comp_ver_short,""),
+                "NameCH": so.name_ch,
+                "NameEN": so.name_en,
+                "Count_MainVer": try_get(self.paper_count_all_fields, so.org_serial, self.main_ver_short),
+                "WorldRank_MainVer" : try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.main_ver_short),
+                "AsiaRank_MainVer" : try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.main_ver_short),
+                "Count_CompVer" : try_get(self.paper_count_all_fields, so.org_serial, self.comp_ver_short),
+                "WorldRank_CompVer":try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.comp_ver_short),
+                "AsiaRank_CompVer":try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.comp_ver_short),
             }
             res.append([
                 item["OrgSerial"], 
@@ -693,8 +686,8 @@ class PresidentESIAnalysis(Anaysis):
             item = {
                 "OrgSerial": so.org_serial,
                 "Country": so.country,
-                "NameCH": so.org_name_ch,
-                "NameEN": so.org_name_en,
+                "NameCH": so.name_ch,
+                "NameEN": so.name_en,
                 "Cited_MainVer":  try_get(self.cited_all_fields, so.org_serial, self.main_ver_short),
                 "WorldRank_MainVer" : try_get(self.cited_world_rank_all_fields, so.org_serial, self.main_ver_short),
                 "AsiaRank_MainVer" : try_get(self.cited_asia_pacific_rank_all_fields, so.org_serial, self.main_ver_short),
@@ -727,8 +720,8 @@ class PresidentESIAnalysis(Anaysis):
             item = {
                 "OrgSerial": so.org_serial,
                 "Country": so.country,
-                "NameCH": so.org_name_ch,
-                "NameEN": so.org_name_en,
+                "NameCH": so.name_ch,
+                "NameEN": so.name_en,
                 "AvgCited_MainVer":  try_get(self.avg_cited_all_fields, so.org_serial, self.main_ver_short),
                 "Rank_MainVer" : main_rank[so.org_serial],
                 "AvgCited_CompVer" : try_get(self.avg_cited_all_fields, so.org_serial, self.comp_ver_short),
@@ -754,8 +747,8 @@ class PresidentESIAnalysis(Anaysis):
             item = {
                 "OrgSerial": so.org_serial,
                 "Country": so.country,
-                "NameCH": so.org_name_ch,
-                "NameEN": so.org_name_en,
+                "NameCH": so.name_ch,
+                "NameEN": so.name_en,
                 "PaperCount_MainVer":  try_get(self.paper_count_all_fields, so.org_serial, self.main_ver_short),
                 "HiCi_MainVer" : try_get(self.hici_all_fields, so.org_serial, self.main_ver_short),
                 "PaperCount_CompVer" : try_get(self.paper_count_all_fields, so.org_serial, self.comp_ver_short),
@@ -783,8 +776,8 @@ class PresidentESIAnalysis(Anaysis):
             res.append([
                 so.org_serial,
                 so.country,
-                so.org_name_ch,
-                so.org_name_en,
+                so.name_ch,
+                so.name_en,
                 try_get(self.hot_all_fields, so.org_serial, self.comp_ver_short),
                 try_get(self.hot_all_fields, so.org_serial, self.main_ver_short)
             ])
@@ -800,10 +793,10 @@ class PresidentESIAnalysis(Anaysis):
             row = [
                 org_info.org_serial,
                 org_info.country,
-                org_info.org_name_ch,
-                org_info.org_name_en
+                org_info.name_ch,
+                org_info.name_en
             ]
-            for maj_field_id, sub_ids in self.maj_fields_and_sub_fields:
+            for _, sub_ids in self.maj_fields_and_sub_fields:
                 for sub_field_id in sub_ids:
                     count = try_get(count_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
                     world_rank_main_ver = try_get(world_rank_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
@@ -919,7 +912,7 @@ class PresidentESIAnalysis(Anaysis):
                     org_ids = top3[sub_field_id]
                     for org_id in org_ids:
                         org_info = self.org_infos[org_id]
-                        name = org_info.org_name_ch
+                        name = org_info.name_ch
                         wr = try_get(world_rank, org_info.org_serial, self.main_ver_short, sub_field_id)
                         apr = try_get(asia_pacific_rank, org_info.org_serial, self.main_ver_short, sub_field_id)
 
@@ -949,7 +942,7 @@ class PresidentESIAnalysis(Anaysis):
 
         df = pd.DataFrame(rows, columns=df_col_names)
 
-        df_res = dal.b22_ranking_calculate(df, 0)
+        df_res = DataAnalysis.b22_ranking_calculate(df, 0)
         res = dict(zip(df_res["key"].astype(str),df_res["Rank"].astype(str)))
         res.update(dict.fromkeys(nan_vals,""))
 

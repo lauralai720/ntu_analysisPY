@@ -1,5 +1,4 @@
 import re
-
 from exceptions import PRISError
 
 class YearType :
@@ -42,6 +41,7 @@ class Year :
             rgx_range_year = re.compile(r"^\d{4}-\d{4}$")
             rgx_single_year_in_half = re.compile(r"^\d{4}H[1-2]$")
             rgx_range_year_in_half = re.compile(r"^\d{4}H[1-2]-\d{4}H[1-2]$")
+            
             if rgx_single_year.match(str_year) and (Year.SupportedYearType & SupportYearType.WholeYear):
                 self.is_single = True
                 self._year = int(str_year)
