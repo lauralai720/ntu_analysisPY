@@ -1,6 +1,9 @@
 ```
 py --version 
 Python 3.14.0
+
+安裝套件
+pip install -r requirements.txt
 ```
 
 ***此版本為C# DLL移除版本 並 優化過***<br>
