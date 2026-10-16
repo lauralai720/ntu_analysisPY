@@ -1,7 +1,10 @@
 ```
 py --version 
-Python 3.11.9
+Python 3.14.0
 ```
+
+***此版本為C# DLL移除版本 並 優化過***<br>
+***若有dlls資料夾，請移除***<br>
 
 **使用方式**</br>
 from pris import run_report </br>
@@ -77,7 +80,7 @@ insert_integrate_data(db_name:str):</br>
         - 104 => S4 - 論文成長率
         - 105 => S5 - 平均被引用次數統計
         - 106 => S6 - 論文數及成長率
-        - 107 => S7 - 高影響期刊係數前15%及40%論文數
+        - 107 => S7 - 高影響期刊係數前15%及30%論文數
         - 109 => S9 - 三年論文成長率
     
     * org_ids - 機構列表，list[str]，格式 : ["TWU000001","TWU000091","TWU000013"]
