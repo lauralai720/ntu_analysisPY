@@ -39,7 +39,7 @@ TemplateNameMapping = {
     TemplateType.S4 : ["論文成長率","逐年論文成長率"],
     TemplateType.S5 : "平均被引用次數統計",
     TemplateType.S6 : "論文數及成長率",
-    TemplateType.S7 : "高影響期刊係數前15%及40%論文數",
+    TemplateType.S7 : "高影響期刊係數前15%及30%論文數",
     TemplateType.S8 : "H指數",
     TemplateType.S9 : ["三年論文成長率","三年論文成長率"],
 }
@@ -96,7 +96,7 @@ class PresidentWOSAnalysis(Anaysis):
         self._ssci_growth_rate = ResettableLazy(self._fetch_ssci_growth_rate)
         self._ahci_growth_rate = ResettableLazy(self._fetch_ahci_growth_rate)
         self._if15_paper_count = ResettableLazy(self._fetch_if15_paper_count)
-        self._if40_paper_count = ResettableLazy(self._fetch_if40_paper_count)
+        self._if30_paper_count = ResettableLazy(self._fetch_if30_paper_count)
         self._h_index= ResettableLazy(self._fetch_h_index)
 
     @cached_property
@@ -165,8 +165,8 @@ class PresidentWOSAnalysis(Anaysis):
     def if15_paper_count(self) -> ORG_MAP:
         return self._if15_paper_count.value
     @property
-    def if40_paper_count(self) -> ORG_MAP:
-        return self._if40_paper_count.value
+    def if30_paper_count(self) -> ORG_MAP:
+        return self._if30_paper_count.value
     @property
     def h_index(self) -> ORG_MAP:
         return self._h_index.value
@@ -358,12 +358,12 @@ class PresidentWOSAnalysis(Anaysis):
         res = self.get_orgmap_from_df(df_if15_paper_count)
         return res
 
-    def _fetch_if40_paper_count(self):
+    def _fetch_if30_paper_count(self):
         m = self.paper_metrics
         if not db_schema.schema.PaperJrcSubjectInfo:
             db_schema.schema.PaperJrcSubjectInfo = PaperJcrIFSubjectInfo()
 
-        selected_val = [self.latest_jrc_year, 0.40,-1,-1]
+        selected_val = [self.latest_jrc_year, 0.30,-1,-1]
         def get_where_clauses(tbl):
             where = self.get_subject_where_clause(db_schema.schema.PaperJrcSubjectInfo, selected_val, tbl)
             return [where]
@@ -703,7 +703,7 @@ class PresidentWOSAnalysis(Anaysis):
                     
             cnt_list = []
             if15_cnt_list = []
-            if40_cnt_list = []
+            if30_cnt_list = []
             for y in self.years:
                 if merge_key:
                     org_key = merge_key[y]
@@ -712,43 +712,43 @@ class PresidentWOSAnalysis(Anaysis):
 
                 cnt = self.paper_count.get(org_key,{}).get(y, 0)
                 if15_cnt = self.if15_paper_count.get(org_key,{}).get(y, 0)
-                if40_cnt = self.if40_paper_count.get(org_key,{}).get(y, 0)
+                if30_cnt = self.if30_paper_count.get(org_key,{}).get(y, 0)
 
                 cnt_list.append(str(cnt))
                 if cnt == 0 :
                     if15_cnt_list.extend(["0","0"])
-                    if40_cnt_list.extend(["0","0"])
+                    if30_cnt_list.extend(["0","0"])
                 else:
                     if15_cnt_list.extend([str(if15_cnt), str(if15_cnt/cnt)])
-                    if40_cnt_list.extend([str(if40_cnt), str(if40_cnt/cnt)])
+                    if30_cnt_list.extend([str(if30_cnt), str(if30_cnt/cnt)])
 
             temp_rows.append(cnt_list)
             temp_rows.append(if15_cnt_list)
-            temp_rows.append(if40_cnt_list)
+            temp_rows.append(if30_cnt_list)
             
             # paper_count_per_year = self.paper_count.get(org,{})
             # if15_paper_count_per_year = self.if15_paper_count.get(org,{})
-            # if40_paper_count_per_year = self.if40_paper_count.get(org,{})
+            # if30_paper_count_per_year = self.if30_paper_count.get(org,{})
             
             # cnt_list = []
             # if15_cnt_list = []
-            # if40_cnt_list = []
+            # if30_cnt_list = []
             # for y in self.years:
             #     cnt = paper_count_per_year.get(y, 0)
             #     if15_cnt = if15_paper_count_per_year.get(y, 0)
-            #     if40_cnt = if40_paper_count_per_year.get(y, 0)
+            #     if30_cnt = if30_paper_count_per_year.get(y, 0)
 
             #     cnt_list.append(str(cnt))
             #     if cnt == 0 :
             #         if15_cnt_list.extend(["0","0"])
-            #         if40_cnt_list.extend(["0","0"])
+            #         if30_cnt_list.extend(["0","0"])
             #     else:
             #         if15_cnt_list.extend([str(if15_cnt), str(if15_cnt/cnt)])
-            #         if40_cnt_list.extend([str(if40_cnt), str(if40_cnt/cnt)])
+            #         if30_cnt_list.extend([str(if30_cnt), str(if30_cnt/cnt)])
 
             # temp_rows.append(cnt_list)
             # temp_rows.append(if15_cnt_list)
-            # temp_rows.append(if40_cnt_list)
+            # temp_rows.append(if30_cnt_list)
 
         return self._build_rows(compute)
 
@@ -868,7 +868,7 @@ class PresidentWOSAnalysis(Anaysis):
                 org_serial = f"*{org_serial}"
                 merged_paper_count_per_year[org_serial] = {}
                 for y in self.years:
-                    cnt = self.paper_count.get(org_key,{}).get(y, 0)    
+                    cnt = self.paper_count.get(org,{}).get(y, 0)    
                     merged_paper_count_per_year[org_serial][y] = cnt
                 add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
 

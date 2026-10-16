@@ -455,7 +455,7 @@ class S7(Template_WOS):
                 else:
                     r_cells.append(
                         ECell(
-                            text="IF值40%論文數", 
+                            text="IF值30%論文數", 
                             vertical_align=self.DefaultCellVerticalAlignment,
                             horizontal_align=self.DefaultCellHorizontalAlignment
                         )
