@@ -834,8 +834,8 @@ class Indicator(Metrics):
         res = res.drop(columns=["Num","Cited"])
         return res
 
-    def h_index(self) -> pd.DataFrame:
-        return DataAnalysis.b06_h_index_calculate(self.hIndex_hcore_cited_count)
+    # def h_index(self) -> pd.DataFrame:
+    #     return DataAnalysis.b06_h_index_calculate(self.hIndex_hcore_cited_count)
 
 @dataclass
 class PaperIndicator(Indicator):

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 def _quote(value: Any, unicode: bool = True) -> str:
     prefix = "N" if unicode else ""
-    return f"{prefix}'{str(value).replace(chr(39), chr(39) * 2)}'"
+    return f"{prefix}'{str(value).replace(chr(39), chr(39) * 2)}'" #replace("'", "''")
 
 @dataclass
 class _WhereObject:
@@ -105,37 +105,45 @@ class Where:
     def __str__(self) -> str:
         return self.to_sql()
 
+    ## c1 <op> c2. [OrgSerial] = [OrgID]
     @classmethod
     def column(cls, c1: "Column", op: OpType, c2: "Column") -> "Where":
         return cls(_WhereObject("column", locals()))
 
+    ## c1 <op> c2，目前未使用到
     @classmethod
     def const(cls, c1: str, op: OpType, c2: str) -> "Where":
         return cls(_WhereObject("const", locals()))
 
+    ## c1 <op> c2，ex. [OrgSerial] = 'TWU000001'
     @classmethod
     def column_to_const(cls, c1: "Column", op: OpType, c2: str) -> "Where":
         return cls(_WhereObject("column_to_const", locals()))
 
+    ## column <op> NULL，ex. [OrgSerial] = NULL
     @classmethod
     def null(cls, column: "Column", op: OpType) -> "Where":
         return cls(_WhereObject("null", {"column": column, "op": op}))
 
+    ## column IN (",".join(values))
     @classmethod
     def column_val_in_multi_const(cls, column: "Column", op: OpType,
                                   values: list[str]) -> "Where":
         return cls(_WhereObject("multi_const", {"column": column, "op": op, "values": list(values)}))
 
+    ## 目前未使用到
     @classmethod
     def func_column_to_const(cls, func: str, column: "Column", op: OpType,
                              value: str) -> "Where":
         return cls(_WhereObject("func_const", {"func": func, "column": column, "op": op, "value": value}))
 
+    ## 目前未使用到
     @classmethod
     def func_column_val_in_multi_const(cls, func: str, column: "Column", op: OpType,
                                        values: list[str]) -> "Where":
         return cls(_WhereObject("func_multi", {"func": func, "column": column, "op": op, "values": list(values)}))
 
+    # column <op1> value1 <op2> value2
     @classmethod
     def operated_column_to_const(cls, column: "Column", op1: OpType, value1: str,
                                  op2: OpType, value2: str) -> "Where":

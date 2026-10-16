@@ -88,27 +88,27 @@ def a08_cntavg_calculate( df : pd.DataFrame, decimals:int = -1) -> pd.DataFrame:
     return ret
 
 
-# B06_H_Index.Calculate
-# [Bug fix] 原版呼叫 copy_subject_value_to_row(subjs) 少一個參數且該函式沒有回傳值,
-#           而且用 DataFrame 的 index label 判斷「第一列」(排序後 label 不一定是 0) → 一旦被呼叫就會 TypeError。
-# 輸入: [主題欄...][辨識欄][被引次數],各主題內須依被引次數遞減排序(PaperList.cited_count 已排序)。
-def b06_h_index_calculate(df : pd.DataFrame) -> pd.DataFrame:
-    subj_cols = list(df.columns[:-2])
-    cited_col = df.columns[-1]
-    cited = pd.to_numeric(df[cited_col], errors="coerce").fillna(0).astype("int64")
-    work = df[subj_cols].copy()
-    work["_c"] = cited.values
+# # B06_H_Index.Calculate
+# # [Bug fix] 原版呼叫 copy_subject_value_to_row(subjs) 少一個參數且該函式沒有回傳值,
+# #           而且用 DataFrame 的 index label 判斷「第一列」(排序後 label 不一定是 0) → 一旦被呼叫就會 TypeError。
+# # 輸入: [主題欄...][辨識欄][被引次數],各主題內須依被引次數遞減排序(PaperList.cited_count 已排序)。
+# def b06_h_index_calculate(df : pd.DataFrame) -> pd.DataFrame:
+#     subj_cols = list(df.columns[:-2])
+#     cited_col = df.columns[-1]
+#     cited = pd.to_numeric(df[cited_col], errors="coerce").fillna(0).astype("int64")
+#     work = df[subj_cols].copy()
+#     work["_c"] = cited.values
 
-    def h(vals):
-        v = sorted(vals, reverse=True)
-        return sum(1 for i, c in enumerate(v, 1) if c >= i)
+#     def h(vals):
+#         v = sorted(vals, reverse=True)
+#         return sum(1 for i, c in enumerate(v, 1) if c >= i)
 
-    if subj_cols:
-        res = work.groupby(subj_cols, sort=False, dropna=False)["_c"].apply(h).reset_index()
-    else:
-        res = pd.DataFrame({"_c": [h(work["_c"])]})
-    res.columns = subj_cols + ["H-Index"]
-    return res
+#     if subj_cols:
+#         res = work.groupby(subj_cols, sort=False, dropna=False)["_c"].apply(h).reset_index()
+#     else:
+#         res = pd.DataFrame({"_c": [h(work["_c"])]})
+#     res.columns = subj_cols + ["H-Index"]
+#     return res
 
 
 # A08_CntAvg.Calculate JOIN
