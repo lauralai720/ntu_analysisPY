@@ -99,6 +99,7 @@ class JoinTable(ITable):
                  on: JoinOn, collate: str | None = None,
                  ignore_auto_collate: bool = False):
         super().__init__()
+        self.outer = self           # ITable 不再提供預設值,與 C# 一致由子類別自行設定
         self.left, self.right = left, right
         self.left.outer = self
         self.right.outer = self

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import re
 import secrets
 
 from exceptions import PRISError
@@ -9,7 +10,10 @@ from .sql import SQLExecute
 
 class ITable(ABC):
     def __init__(self):
-        self.outer: ITable = self
+        # [對齊 C#] C# 的 ITable.outer 只是一個預設為 null 的屬性,「由各子類別的建構子自行設定」
+        # (Table / JoinTable 建構子都是 outer = this;複製建構子則依來源決定)。
+        # 原本這裡預設 self.outer = self,會讓複製建構子裡「self.outer == table」之類的判斷失去意義。
+        self.outer: "ITable | None" = None
         self.tmp_table_name: str | None = None
 
     @property
@@ -26,6 +30,8 @@ class ITable(ABC):
     def outmost(self):
         current = self
         while current.outer is not current:
+            if current.outer is None:        # C# 這裡會是 NullReferenceException;給明確訊息
+                raise PRISError(f"{type(current).__name__} 尚未設定 outer(子類別建構子必須設定)")
             current = current.outer
         return current
     
@@ -77,7 +83,7 @@ class ITable(ABC):
 
 class Table(ITable):
     _existing_aliases: set[str] = set()
-    def __init__(self, full_name: str, db_name: str | None = None, table = None, alias: str = ""):
+    def __init__(self, full_name: str | None = None, db_name: str | None = None, table = None, alias: str = ""):
         super().__init__()
 
         # COPY Table的狀態
@@ -93,6 +99,9 @@ class Table(ITable):
                 alias = f"{self.table_name.lower()}_COPY"
             self._alias = self.register_alias(alias)
             return
+
+        if full_name is None:      # 非複製、又沒給名稱 → 明確報錯(原本是 AttributeError)
+            raise PRISError("必須提供 full_name 或 table")
 
         if db_name is None:
             parts = full_name.split(".")
@@ -115,13 +124,29 @@ class Table(ITable):
     def full_name(self) -> str:
         return f"[{self.db_name}].dbo.[{self.table_name}]"
 
-    def set_full_name(self, full_name: str) -> None:
-        parts = full_name.split(".")
-        if len(parts) != 3:
+    # C# Table.getFullNameFromString 的 regex(DB 名稱可含中文、空白、& . - ;表名可含 #)
+    _FULL_NAME_RE = re.compile(r"\[?([\u4e00-\u9fa5 a-zA-Z0-9_&\.-]*)\]?\.dbo\.\[?([a-zA-Z0-9_#]*)\]?")
+
+    @classmethod
+    def _parse_full_name(cls, full_name: str) -> tuple[str, str]:
+        m = cls._FULL_NAME_RE.match(full_name)
+        if not m:
             raise PRISError("資料表名稱格式限定為 XXX.dbo.YYY")
-        self.db_name, self.table_name = parts[0].strip("[]"), parts[2].strip("[]")
+        return m.group(1), m.group(2)          # (db, table)
+
+    def set_full_name(self, full_name: str) -> None:
+        # [對齊 C#] 原本用 split(".") 會讓含「.」的 DB 名稱(如 [Some.DB].dbo.[T])直接報錯;
+        # C# 的 SetFullName 是用 regex 解析。建構子則維持 C# 原本的 Split('.') 行為。
+        self.db_name, self.table_name = self._parse_full_name(full_name)
 
     SetFullName = set_full_name
+
+    def table_name_equal(self, full_table_name: str) -> bool:
+        """對應 C# Table.TableNameEqual:只比對表名(不含 DB)"""
+        _db, t = self._parse_full_name(full_table_name)
+        return t == self.table_name
+
+    TableNameEqual = table_name_equal
 
     @property
     def alias(self) -> str:
@@ -145,26 +170,26 @@ class Table(ITable):
 
     @staticmethod
     def copy_table(table:ITable, alias: str = "") -> "Table":
-        if not isinstance(table, ITable):
-            raise PRISError("table 參數必須是 ITable 的實例")
+        if not isinstance(table, Table):          # C#: "限制傳入類別為 Table"
+            raise PRISError("限制傳入類別為 Table")
         new_table = Table(table=table, alias=alias)    
         return new_table
 
-    def outer_cols_to_string(self, col_replace_const : dict[str, Column] = None)->str:
+    def outer_cols_to_string(self, col_replace_const : "dict[Column, str] | None" = None)->str:
         if not col_replace_const:
-            return ",".join([f"{col.alias}" for col in self.columns])
+            return ",".join([f"[{col.alias}]" for col in self.columns])      # C#: [{x.alias}]
 
         return ",".join(
             f"N'{col_replace_const[c]}'" if c in col_replace_const else f"[{c.alias}]"
             for c in self.columns
         )
     
-    def inner_cols_to_string(self, col_replace_const : dict[str, Column] = None)->str:
+    def inner_cols_to_string(self, col_replace_const : "dict[Column, str] | None" = None)->str:
         if not col_replace_const:
             return ",".join([f"{col.to_inner_string()}" for col in self.columns])
 
         return ",".join(
-            f"N'{col_replace_const[c]}'" if c in col_replace_const else f"[{c.to_inner_string()}]"
+            f"'{col_replace_const[c]}'" if c in col_replace_const else f"[{c.to_inner_string()}]"
             for c in self.columns
         )
     
@@ -281,7 +306,9 @@ class Table(ITable):
         SQLExecute.do_no_query(str_cmd)
 
     def insert_temp_table(self,col: Column,wheres:list[Where]=None, distinct:bool=True):
-        self.before_insert_check(col)
+        # [對齊 C#] 這個多載在 C# 沒有 checkIfColumnForThisTable,只需要暫存表名稱
+        if not self.tmp_table_name:
+            raise PRISError("尚未設定暫存表名稱，請先設定tmp_table_name。")
         distinct_str = self.get_distinct_str(distinct)
         select_cols = self.outer_cols_to_string()
         where_str = self.where_clause_to_string(wheres)

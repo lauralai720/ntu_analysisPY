@@ -128,6 +128,9 @@ class PresidentWOSAnalysis(Anaysis):
     def paper_count(self) -> ORG_MAP:
         return self._paper_count.value
     @property
+    def first_or_reprint_author_paper_count(self) -> ORG_MAP :
+        return self._first_or_reprint_author_paper_count.value
+    @property
     def scie_paper_count(self) -> ORG_MAP:
         return self._scie_data_info.value.get(PAPER_COUNT, {})
     @property
@@ -137,6 +140,15 @@ class PresidentWOSAnalysis(Anaysis):
     def ahci_paper_count(self) -> ORG_MAP:
         return self._ahci_data_info.value.get(PAPER_COUNT, {})
     @property
+    def if15_paper_count(self) -> ORG_MAP:
+        return self._if15_paper_count.value
+    @property
+    def if30_paper_count(self) -> ORG_MAP:
+        return self._if30_paper_count.value
+    @property
+    def growth_rate(self) -> ORG_MAP:
+        return self._growth_rate.value
+    @property
     def scie_growth_rate(self) -> ORG_MAP:
         return self._scie_data_info.value.get(GROWTH_RATE, {})
     @property
@@ -145,12 +157,6 @@ class PresidentWOSAnalysis(Anaysis):
     @property
     def ahci_growth_rate(self) -> ORG_MAP:
         return self._ahci_data_info.value.get(GROWTH_RATE, {})
-    @property
-    def cited_count(self) -> ORG_MAP:
-        return self._cited_count.value
-    @property
-    def growth_rate(self) -> ORG_MAP:
-        return self._growth_rate.value
     # @property
     # def growth_rate_range_year(self) -> ORG_MAP:
     #     return self._growth_rate_range_year.value
@@ -158,20 +164,15 @@ class PresidentWOSAnalysis(Anaysis):
     # def growth_rate_without_year(self) -> ORG_MAP:
     #     return self._growth_rate_without_year.value
     @property
-    def first_or_reprint_author_paper_count(self) -> ORG_MAP :
-        return self._first_or_reprint_author_paper_count.value
+    def cited_count(self) -> ORG_MAP:
+        return self._cited_count.value
     @property
     def first_or_reprint_author_cited_count(self) -> ORG_MAP :
         return self._first_or_reprint_author_cited_count.value
     @property
     def avg_cited(self) -> ORG_MAP:
         return self._avg_cited.value
-    @property
-    def if15_paper_count(self) -> ORG_MAP:
-        return self._if15_paper_count.value
-    @property
-    def if30_paper_count(self) -> ORG_MAP:
-        return self._if30_paper_count.value
+
 
     # 論文指標 (基礎數據)
     @property
@@ -651,7 +652,7 @@ class PresidentWOSAnalysis(Anaysis):
                 cnt = self.paper_count.get(org_key,{}).get(y, 0)
                 first_or_reprint_author_cnt = self.first_or_reprint_author_paper_count.get(org_key,{}).get(y, 0)
             
-                proportion = 0 if cnt == 0 else first_or_reprint_author_cnt / cnt
+                proportion = self.get_ratio(first_or_reprint_author_cnt, cnt) #0 if cnt == 0 else first_or_reprint_author_cnt / cnt
                 res_org_val.extend([str(cnt),str(first_or_reprint_author_cnt),str(proportion)])
             temp_rows.append(res_org_val)
 
@@ -669,7 +670,7 @@ class PresidentWOSAnalysis(Anaysis):
                 cited = self.cited_count.get(org_key,{}).get(y, 0)
                 first_or_reprint_author_cited = self.first_or_reprint_author_cited_count.get(org_key,{}).get(y, 0)
             
-                proportion = 0 if cited == 0 else first_or_reprint_author_cited / cited
+                proportion = self.get_ratio(first_or_reprint_author_cited, cited)# 0 if cited == 0 else first_or_reprint_author_cited / cited
                 res_org_val.extend([str(cited),str(first_or_reprint_author_cited),str(proportion)])
             temp_rows.append(res_org_val)
 
@@ -747,8 +748,8 @@ class PresidentWOSAnalysis(Anaysis):
                     if15_cnt_list.extend(["0","0"])
                     if30_cnt_list.extend(["0","0"])
                 else:
-                    if15_cnt_list.extend([str(if15_cnt), str(if15_cnt/cnt)])
-                    if30_cnt_list.extend([str(if30_cnt), str(if30_cnt/cnt)])
+                    if15_cnt_list.extend([str(if15_cnt), str(self.get_ratio(if15_cnt, cnt))])
+                    if30_cnt_list.extend([str(if30_cnt), str(self.get_ratio(if30_cnt, cnt))])
 
             temp_rows.append(cnt_list)
             temp_rows.append(if15_cnt_list)
@@ -855,7 +856,6 @@ class PresidentWOSAnalysis(Anaysis):
                 for y in self.years:
                     # [Bug fix] 「*」列代表「未合併」,應使用原始 key(org);
                     # 原本用的 org_key 是上面迴圈殘留的「最後一年的合併 key」,造成 * 列其實是合併資料。
-                    # (與 S1~S7 的 _build_rows:未合併列用 org 一致。請對照 C# 原版確認)
                     cnt = self.paper_count.get(org,{}).get(y, 0)    
                     merged_paper_count_per_year[org_serial][y] = cnt
                 add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
@@ -888,4 +888,9 @@ class PresidentWOSAnalysis(Anaysis):
 
         return res
 
+    @staticmethod
+    def get_ratio(val:float, sum:float)-> float:
+        if sum == 0: 
+            return 0
+        return val/sum
             
