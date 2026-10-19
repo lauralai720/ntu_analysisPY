@@ -218,6 +218,8 @@ class SQLExecute():
         if _conn is None:
             raise PRISError("尚未設定DB連線，請先呼叫 get_connection()。")
 
+        # print(sql_cmd)
+        # print()
         with _conn.cursor() as cursor:
             if params:
                 cursor.execute(sql_cmd, params)
@@ -249,6 +251,8 @@ class SQLExecute():
         if _conn is None:
             raise PRISError("尚未設定DB連線，請先呼叫 get_connection()。")
 
+        # print(sql_cmd)
+        # print()
         with _conn.cursor() as cursor:
             if params:
                 cursor.execute(sql_cmd, params)

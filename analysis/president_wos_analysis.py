@@ -88,6 +88,7 @@ class PresidentWOSAnalysis(Anaysis):
         self._cited_count = ResettableLazy(self._fetch_cited_count)
         self._first_or_reprint_author_cited_count = ResettableLazy(self._fetch_first_or_reprint_author_cited_count)
         self._growth_rate = ResettableLazy(self._fetch_growth_rate)
+        self._range_year_growth_rate= ResettableLazy(self._fetch_range_year_growth_rate)
         # self._growth_rate_range_year = ResettableLazy(self._fetch_growth_rate_range_year) # 暫時沒用到
         # self._growth_rate_without_year = ResettableLazy(self._fetch_growth_rate_without_year) # 是因為年份格式不統一所以才有這個function，現在用不到
         self._avg_cited = ResettableLazy(self._fetch_avg_cited)
@@ -103,6 +104,7 @@ class PresidentWOSAnalysis(Anaysis):
         # self._ahci_growth_rate = ResettableLazy(self._fetch_ahci_growth_rate)
         self._if15_paper_count = ResettableLazy(self._fetch_if15_paper_count)
         self._if30_paper_count = ResettableLazy(self._fetch_if30_paper_count)
+        
         self._first_or_reprint_subject_cache = None   # (subject, bind_cols)
 
     @cached_property
@@ -113,6 +115,10 @@ class PresidentWOSAnalysis(Anaysis):
     def latest_jrc_year(self) -> int:
         _jcrVersions = self.get_jcr_version_list()
         return max(_jcrVersions)
+
+    @cached_property
+    def selected_range_years(self)->list[str]:
+        return Util.get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
 
     @cached_property
     def merge_orgs(self) -> dict:
@@ -148,6 +154,9 @@ class PresidentWOSAnalysis(Anaysis):
     @property
     def growth_rate(self) -> ORG_MAP:
         return self._growth_rate.value
+    @property
+    def range_year_growth_rate(self) -> ORG_MAP:
+        return self._range_year_growth_rate.value
     @property
     def scie_growth_rate(self) -> ORG_MAP:
         return self._scie_data_info.value.get(GROWTH_RATE, {})
@@ -214,27 +223,25 @@ class PresidentWOSAnalysis(Anaysis):
         df_paper_count = self.paper_metrics.main_paper_count()
         res = self.get_orgmap_from_df(df_paper_count)
         return res
+    
+    def _fetch_first_or_reprint_author_paper_count(self):
+        return self._with_first_or_reprint_subject(
+            lambda: self.get_orgmap_from_df(self.paper_metrics.main_paper_count()))
+
 
     def _fetch_cited_count(self):
         df_cited = self.paper_metrics.cited
         res = self.get_orgmap_from_df(df_cited)
         return res
     
+    def _fetch_first_or_reprint_author_cited_count(self):
+        return self._with_first_or_reprint_subject(
+            lambda: self.get_orgmap_from_df(self.paper_metrics.cited))
+    
     def _fetch_growth_rate(self):
         df_growth_rate = self.paper_growth_metrics.paper(use_percent_age=False)
         res = self.get_orgmap_from_df(df_growth_rate)
         return res  
-    
-    # def _fetch_growth_rate_range_year(self):
-    #     df_growth_rate = self.paper_growth_metrics.paper(use_percent_age=False)
-    #     res = self.get_orgmap_from_df(df_growth_rate)
-    #     return res  
-
-    # def _fetch_growth_rate_without_year(self):
-    #     df_growth_rate = self.paper_growth_metrics.paper(use_percent_age=False)
-    #     skip_year_list = self.years_without_range
-    #     res = self.get_orgmap_from_df(df_growth_rate, skip_year_list)
-    #     return res  
     
     def _fetch_avg_cited(self):
         df_avg_cited = self.paper_indicator_metrics.avg_cited()
@@ -301,107 +308,6 @@ class PresidentWOSAnalysis(Anaysis):
         }
         return res
     
-    # def _fetch_scie_paper_count(self):
-    #     m = self.paper_metrics
-    #     def get_where_clauses(tbl:Table):
-    #         col_src_db = tbl.GetColumn(db_schema.schema.SourceDBColumnName)
-    #         if col_src_db is None:
-    #             col_src_db = tbl.RetrieveColumn(db_schema.schema.SourceDBColumnName)
-
-    #         where = dal.create_where_operated_column_to_const(
-    #             col_src_db, dal.OPTYPE.BitwiseAnd, "1", dal.OPTYPE.NotEqual, "0"
-    #         )
-    #         return [where]
-    #     m.get_where_clauses = get_where_clauses
-    #     df_scie_paper_count = m.main_paper_count()
-    #     res = self.get_orgmap_from_df(df_scie_paper_count)
-    #     return res
-
-    # def _fetch_ssci_paper_count(self):
-    #     m = self.paper_metrics
-    #     def get_where_clauses(tbl:Table):
-    #         col_src_db = tbl.GetColumn(db_schema.schema.SourceDBColumnName)
-    #         if col_src_db is None:
-    #             col_src_db = tbl.RetrieveColumn(db_schema.schema.SourceDBColumnName)
-
-    #         where = dal.create_where_operated_column_to_const(
-    #             col_src_db, dal.OPTYPE.BitwiseAnd, "2", dal.OPTYPE.NotEqual, "0"
-    #         )
-    #         return [where]
-    #     m.get_where_clauses = get_where_clauses
-    #     df_ssci_paper_count = m.main_paper_count()
-    #     res = self.get_orgmap_from_df(df_ssci_paper_count)
-    #     return res
-
-    # def _fetch_ahci_paper_count(self):
-    #     m = self.paper_metrics
-    #     def get_where_clauses(tbl:Table):
-    #         col_src_db = tbl.GetColumn(db_schema.schema.SourceDBColumnName)
-    #         if col_src_db is None:
-    #             col_src_db = tbl.RetrieveColumn(db_schema.schema.SourceDBColumnName)
-
-    #         where = dal.create_where_operated_column_to_const(
-    #             col_src_db, dal.OPTYPE.BitwiseAnd, "4", dal.OPTYPE.NotEqual, "0"
-    #         )
-    #         return [where]
-    #     m.get_where_clauses = get_where_clauses
-    #     df_ahci_paper_count = m.main_paper_count()
-    #     res = self.get_orgmap_from_df(df_ahci_paper_count)
-    #     return res
-
-    # def _fetch_scie_growth_rate(self):
-    #     m = self.paper_growth_metrics
-    #     def get_where_clauses(tbl:Table):
-    #         col_src_db = tbl.GetColumn(db_schema.schema.SourceDBColumnName)
-    #         if col_src_db is None:
-    #             col_src_db = tbl.RetrieveColumn(db_schema.schema.SourceDBColumnName)
-
-    #         where = dal.create_where_operated_column_to_const(
-    #             col_src_db, dal.OPTYPE.BitwiseAnd, "1", dal.OPTYPE.NotEqual, "0"
-    #         )
-    #         return [where]
-    #     m.get_where_clauses = get_where_clauses
-    #     df_scie_growth_rate = m.paper(use_percent_age=False)
-    #     skip_year_list = self.years_without_range
-    #     res = self.get_orgmap_from_df(df_scie_growth_rate, skip_year_list)
-    #     return res
-
-    # def _fetch_ssci_growth_rate(self):
-    #     m = self.paper_growth_metrics
-    #     def get_where_clauses(tbl:Table):
-    #         col_src_db = tbl.GetColumn(db_schema.schema.SourceDBColumnName)
-    #         if col_src_db is None:
-    #             col_src_db = tbl.RetrieveColumn(db_schema.schema.SourceDBColumnName)
-
-    #         where = dal.create_where_operated_column_to_const(
-    #             col_src_db, dal.OPTYPE.BitwiseAnd, "2", dal.OPTYPE.NotEqual, "0"
-    #         )
-    #         return [where]
-    #     m.get_where_clauses = get_where_clauses
-    #     df_ssci_growth_rate = m.paper(use_percent_age=False)
-    #     skip_year_list = self.years_without_range
-    #     res = self.get_orgmap_from_df(df_ssci_growth_rate, skip_year_list)
-    #     return res
-
-    # def _fetch_ahci_growth_rate(self):
-    #     m = self.paper_growth_metrics
-    #     def get_where_clauses(tbl:Table):
-    #         col_src_db = tbl.GetColumn(db_schema.schema.SourceDBColumnName)
-    #         if col_src_db is None:
-    #             col_src_db = tbl.RetrieveColumn(db_schema.schema.SourceDBColumnName)
-
-    #         where = dal.create_where_operated_column_to_const(
-    #             col_src_db, dal.OPTYPE.BitwiseAnd, "4", dal.OPTYPE.NotEqual, "0"
-    #         )
-    #         return [where]
-    #     m.get_where_clauses = get_where_clauses
-    #     df_ahci_growth_rate = m.paper(use_percent_age=False)
-    #     skip_year_list = self.years_without_range
-    #     res = self.get_orgmap_from_df(df_ahci_growth_rate, skip_year_list)
-    #     return res
-
-
-
     def _fetch_first_or_reprint_author_paper_count(self):
         return self._with_first_or_reprint_subject(
             lambda: self.get_orgmap_from_df(self.paper_metrics.main_paper_count()))
@@ -425,34 +331,68 @@ class PresidentWOSAnalysis(Anaysis):
         return res
     
     def _fetch_if15_paper_count(self):
-        # m = self.paper_metrics
-        # if not db_schema.schema.PaperJrcSubjectInfo:
-        #     db_schema.schema.PaperJrcSubjectInfo = PaperJcrIFSubjectInfo()
-
-        # selected_val = [self.latest_jrc_year, 0.15,-1,-1]
-        # def get_where_clauses(tbl):
-        #     where = self.get_subject_where_clause(db_schema.schema.PaperJrcSubjectInfo, selected_val, tbl)
-        #     return [where]
-        # m.get_where_clauses = get_where_clauses
-        # df_if15_paper_count = m.main_paper_count()
-        # res = self.get_orgmap_from_df(df_if15_paper_count)
-        # return res
         return self._get_if_paper_count(0.15)
 
     def _fetch_if30_paper_count(self):
-        # m = self.paper_metrics
-        # if not db_schema.schema.PaperJrcSubjectInfo:
-        #     db_schema.schema.PaperJrcSubjectInfo = PaperJcrIFSubjectInfo()
-
-        # selected_val = [self.latest_jrc_year, 0.30,-1,-1]
-        # def get_where_clauses(tbl):
-        #     where = self.get_subject_where_clause(db_schema.schema.PaperJrcSubjectInfo, selected_val, tbl)
-        #     return [where]
-        # m.get_where_clauses = get_where_clauses
-        # df_if15_paper_count = m.main_paper_count()
-        # res = self.get_orgmap_from_df(df_if15_paper_count)
-        # return res
         return self._get_if_paper_count(0.30)
+
+    def _fetch_range_year_growth_rate(self):
+        select_years = self.selected_range_years #Util.get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
+        
+        partial_merge_periods = self.partial_merge_periods
+        merged_paper_count_per_year = {}
+        merged_paper_count_range_year = {}
+
+        def add_paper_count_range_year(res:dict, org_serial:str, per_year_vals:list[int]):
+            res[org_serial] = {}
+            for range_y in select_years:
+                (s , e) = map(int, range_y.split("-"))
+                total = 0
+                for r_y in range(s, e + 1):
+                    per_y_val = per_year_vals.get(str(r_y))
+                    if per_y_val is None:      # [Bug fix] 原本 `sum + None` → TypeError(且 sum 蓋掉內建函式)
+                        raise PRISError(f"年份清單缺少 {r_y},無法計算 {range_y} 的三年論文數")
+                    total += per_y_val
+                res[org_serial][range_y] = total
+
+        for org in self.orgs:
+            org_serial, start_year, end_year = self._split_orgs(org)
+                        
+            if (int(start_year), int(end_year)) != (1900, 2300):
+                continue
+
+            key_by_year = partial_merge_periods.get(org_serial, {})
+            org_key = org
+            org_serial = org_serial
+
+            # 判斷是否有合併的資料，需要多一筆未合併的row
+            if not key_by_year:
+                merged_paper_count_per_year[org_serial] = {}
+                for y in self.years:
+                    cnt = self.paper_count.get(org_key,{}).get(y, 0)
+                    merged_paper_count_per_year[org_serial][y] = cnt
+                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
+                continue
+
+            merged_paper_count_per_year[org_serial] = {}
+            for y in self.years:
+                org_key = key_by_year[y]
+                cnt = self.paper_count.get(org_key,{}).get(y, 0)
+                merged_paper_count_per_year[org_serial][y] = cnt
+
+            add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
+
+            if len(set(key_by_year.values())) > 1:
+                org_serial = f"*{org_serial}"
+                merged_paper_count_per_year[org_serial] = {}
+                for y in self.years:
+                    # [Bug fix] 「*」列代表「未合併」,應使用原始 key(org);
+                    # 原本用的 org_key 是上面迴圈殘留的「最後一年的合併 key」,造成 * 列其實是合併資料。
+                    cnt = self.paper_count.get(org,{}).get(y, 0)    
+                    merged_paper_count_per_year[org_serial][y] = cnt
+                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
+
+        return merged_paper_count_range_year
 
 
     def get_subject_where_clause(self, subj_info:GetSubject, selected_val : list, table:"Table"):
@@ -804,64 +744,10 @@ class PresidentWOSAnalysis(Anaysis):
         return temp_rows, basic_rows
     
     def get_s9_rows(self):
-        # 將年份改成 3年，2年重複的形式(2020-2022、2021-2023...etc)
-        select_years = Util.get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
-        
-        partial_merge_periods = self.partial_merge_periods
-        merged_paper_count_per_year = {}
-        merged_paper_count_range_year = {}
-
-        def add_paper_count_range_year(res:dict, org_serial:str, per_year_vals:list[int]):
-            res[org_serial] = {}
-            for range_y in select_years:
-                (s , e) = map(int, range_y.split("-"))
-                total = 0
-                for r_y in range(s, e + 1):
-                    per_y_val = per_year_vals.get(str(r_y))
-                    if per_y_val is None:      # [Bug fix] 原本 `sum + None` → TypeError(且 sum 蓋掉內建函式)
-                        raise PRISError(f"年份清單缺少 {r_y},無法計算 {range_y} 的三年論文數")
-                    total += per_y_val
-                res[org_serial][range_y] = total
-
-        for org in self.orgs:
-            org_serial, start_year, end_year = self._split_orgs(org)
-                        
-            if (int(start_year), int(end_year)) != (1900, 2300):
-                continue
-
-            key_by_year = partial_merge_periods.get(org_serial, {})
-            org_key = org
-            org_serial = org_serial
-
-            # 判斷是否有合併的資料，需要多一筆未合併的row
-            if not key_by_year:
-                merged_paper_count_per_year[org_serial] = {}
-                for y in self.years:
-                    cnt = self.paper_count.get(org_key,{}).get(y, 0)
-                    merged_paper_count_per_year[org_serial][y] = cnt
-                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
-                continue
-
-            merged_paper_count_per_year[org_serial] = {}
-            for y in self.years:
-                org_key = key_by_year[y]
-                cnt = self.paper_count.get(org_key,{}).get(y, 0)
-                merged_paper_count_per_year[org_serial][y] = cnt
-
-            add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
-
-            if len(set(key_by_year.values())) > 1:
-                org_serial = f"*{org_serial}"
-                merged_paper_count_per_year[org_serial] = {}
-                for y in self.years:
-                    # [Bug fix] 「*」列代表「未合併」,應使用原始 key(org);
-                    # 原本用的 org_key 是上面迴圈殘留的「最後一年的合併 key」,造成 * 列其實是合併資料。
-                    cnt = self.paper_count.get(org,{}).get(y, 0)    
-                    merged_paper_count_per_year[org_serial][y] = cnt
-                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
-
+        ## 將年份改成 3年，2年重複的形式(2020-2022、2021-2023...etc)
+        select_years = self.selected_range_years
         def compute(org:str, temp_rows:list):
-            paper_count_range_year = merged_paper_count_range_year.get(org,{})
+            paper_count_range_year = self.range_year_growth_rate.get(org,{})
             values = [paper_count_range_year[y] for y in select_years]
             # 與 S4 共用 DataAnalysis.calc_growth_rate;第一期與前期為 0 時留白
             temp_rows.append([str(gr) for gr in DataAnalysis.growth_rate_series(values, na_val="")])
