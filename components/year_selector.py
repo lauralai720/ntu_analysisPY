@@ -14,6 +14,7 @@ import re
 import common.db_schema as db_schema
 from common.year import *
 from exceptions import PRISError
+from database import Subject, Column, YearSubject, Table, Where, YTable, YJoinTable
 
 class ESIYearStyle(Enum):
     Style1 = 0
@@ -61,7 +62,7 @@ class YearSelector:
         self.UserColumnName:str = ""
 
     @abstractmethod
-    def get_subject(self, only_fetch_selected : bool = False) -> tuple["Subject", dict[str, "Column"]]:
+    def get_subject(self) -> tuple["Subject", dict[str, "Column"]]:
         pass
 
 
@@ -105,9 +106,7 @@ class ESIYearSelector(YearSelector):
     def get_selected(self) -> list[ESIYear] : 
         return [self.selected_main, self.selected_comp]
 
-    def get_subject(self, only_fetch_selected : bool = False) -> tuple["Subject", dict[str, "Column"], str]:
-            if only_fetch_selected:
-                return None, None
+    def get_subject(self) -> tuple["Subject", dict[str, "Column"], str]:
             from dal_provider import get_dal
             dal = get_dal()
             tbl = dal.create_table(db_schema.schema.MainTableName)
@@ -133,7 +132,7 @@ class PaperYearSubject():
         dal = get_dal()
         y_table = dal.create_year_table(table, False)
         self._year_subject : "YearSubject" = dal.create_year_subject(y_table, val_col, need_year_func_wrap)
-        self.subj.Table.RetrieveColumn(db_schema.schema.PublishDateColumnName)
+        self.subj.table.RetrieveColumn(db_schema.schema.PublishDateColumnName)
         self.col_name = col_name
         self.supported_year_type = SupportYearType.WholeYear | SupportYearType.HalfYear
         
@@ -141,17 +140,11 @@ class PaperYearSubject():
     def subj(self) -> "YearSubject" :
         return self._year_subject
 
-    def add(self, subj_val:str, where_list : list = None):
+    def add(self, subj_val:str, where_list:list["Where"] = None):
         if not self.subj.initialized:
             raise PRISError("YearSubject 尚未初始化, 請先執行 YearSubject.Initial() ")
 
-        from dal_provider import get_dal
-        dal = get_dal()
-
-        conn = dal.get_DB()
-        conn_ref = [conn]
-
-        self.subj.col.SetName(self.subj.UserColumnName)
+        self.subj.column.set_name(self.subj.use_column_name)
 
         period = re.compile(r"\d{4}-\d{4}$")
         single = re.compile(r"\d{4}$")
@@ -163,38 +156,35 @@ class PaperYearSubject():
         secondHalfList_Month = ["7", "8", "9", "10", "11", "12"]
         firstAndSecondHalfList_Month = firstHalfList_Month + secondHalfList_Month
 
-        where_arr = None
-        if where_list is not None:
-            where_arr = dal.to_csharp_array(where_list)
-
-        
+        # where_arr = None
+        # if where_list is not None:
+        #     where_arr = dal.to_csharp_array(where_list)
 
         if period.match(subj_val):
             years = subj_val.split('-')
             from_year = int(years[0]) -1
             to_year = int(years[1]) +1
-           
-            self.subj.Table.InsertTempTable(conn_ref[0], self.subj.col, from_year, to_year, subj_val, Wheres= where_arr)
+            if isinstance(self.subj.table, (YTable, YJoinTable)):
+                self.subj.table.insert_temp_table(self.subj.column, val=from_year, less_val=to_year, label=subj_val, wheres=where_list)
 
         elif single.match(subj_val):
             year = int(subj_val)
-            self.subj.Table.InsertTempTable(conn_ref[0], self.subj.col, year, subj_val, Wheres= where_arr)
+            if isinstance(self.subj.table, (YTable, YJoinTable)):
+                self.subj.table.insert_temp_table(self.subj.column, val=year, label=subj_val, wheres=where_list)
         else:
-            raise("目前沒有其他格式的年份要處理")
+            # [Bug fix] 原本 raise("字串") → TypeError: exceptions must derive from BaseException
+            raise PRISError(f"目前沒有其他格式的年份要處理: {subj_val}")
 
-        self.subj.SubjVals.Add(subj_val)
-        self.subj.col.SetName("Year")
+        self.subj.subj_vals.append(subj_val)
+        self.subj.column.set_name("Year")
 
 class WOSYearSelector(YearSelector):
     def __init__(self):
         self.need_year_func_wrap : bool = False # 值來源至PresidentReport
         self.year_list : list[str] = None
 
-    def get_subject(self, only_fetch_selected : bool = False) -> tuple["Subject", dict[str, "Column"], str]:
+    def get_subject(self) -> tuple["Subject", dict[str, "Column"], str]:
         if not self.year_list:
-            return (None, None, None)
-
-        if only_fetch_selected:
             return (None, None, None)
 
         from dal_provider import get_dal
@@ -205,7 +195,7 @@ class WOSYearSelector(YearSelector):
         bind_col = main_table.RetrieveColumn(db_schema.schema.MainBindColumnName)
 
         year_subject = PaperYearSubject(main_table, time_col, self.need_year_func_wrap, db_schema.schema.TimeColumnName)
-        year_subject.subj.AllowNonWholeYear = False
+        # year_subject.subj.AllowNonWholeYear = False #目前沒用到，先註解
         year_subject.subj.Initialize()
 
         for year in self.year_list:

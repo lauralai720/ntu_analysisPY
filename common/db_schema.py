@@ -35,7 +35,7 @@ class WOSSchema(DBSchema):
     ESICategoryInfoTableName = "AC_Manager.dbo.EsiCategoryInfo"
     ESIComparableDetailTableName = "AC_Manager.dbo.EsiComparableDetail"
     ESIMasterJournalTableName = "AC_Manager.dbo.EsiMasterJournal"
-    OrgAcSecondTableName = "AC_Manager.dbo.OrgAcSecond"
+    OrgAcSecondTableName = "AC_Manager.dbo.OrgAcSecondUnique"
     PaperFieldGroupTableName = "AC_Manager.dbo.Paper_Field_Group"
     PaperFieldInfoTableName = "AC_Manager.dbo.Paper_Field_info"
     PaperFieldESITableName = "AC_Manager.dbo.Paper_Field_ESI"
@@ -43,6 +43,8 @@ class WOSSchema(DBSchema):
     CategoryWOSTableName = "AC_Manager.dbo.Category_WOS"
     CategoryScopusTableName = "AC_Manager.dbo.Category_Scopus"
     NationTableName = "AC_Manager.dbo.Nation"
+    OrgMerge = "AC_Manager.dbo.OrgMerge"
+
     CitedCountColumnName = "TimeCited"
     TimeColumnName = "PublishYear"
     LabelColumnName = "Label"
@@ -83,7 +85,6 @@ class WOSSchema(DBSchema):
     SEQNOColumnName = "SEQNO"
     IsPatentColumnName = "IsPatent"
     PublishDateColumnName = "PublishDate"
-   
     OrgName1CHColumnName = "OrgName1Ch"
     OrgName2CHColumnName = "OrgName2Ch"
     OrgName3CHColumnName = "OrgName3Ch"
@@ -112,10 +113,9 @@ class WOSSchema(DBSchema):
     CountrySerialColumnName = "CountrySerial"
     CountryNameENColumnName = "CountryName_EN"
     TitleNameColumnName = "Title"
-    OrgMerge = "AC_Manager.dbo.OrgMerge"
 
-    WOSOrgSubjectInfo = None
-    PaperJrcSubjectInfo = None
+    WOSOrgSubjectInfo : WOSPaperOrgSubjectInfo = None
+    PaperJrcSubjectInfo : PaperJcrIFSubjectInfo = None
 
     @classmethod
     def set_DB_name(cls, name:str): 
@@ -195,5 +195,4 @@ class ESISchema(DBSchema):
     ESIFieldInfo : ESIFieldSubjectInfo = None
 
 
-
-schema : Optional[DBSchema] = None
+schema : Optional[ESISchema | WOSSchema] = None

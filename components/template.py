@@ -70,7 +70,7 @@ class Template(ABC):
         return f"{self.sheet_tab_name}_{self.get_rawdata_sheet_suffix()}"
     
     @property
-    def ColsWithoutFormat(self) -> set[int]:
+    def cols_without_format(self) -> set[int]:
         return self._cols_without_format
 
     @property
@@ -129,7 +129,6 @@ class Template(ABC):
         for idx, rr in enumerate(self.rows):
             
             row_idx = self.get_original_row_idx(idx, rows, rr)
-            #rcells = self.get_cell_row(idx+1, rr)
             rcells = self.get_cell_row(row_idx+1, rr)
             report_rows.append(rcells)
 
@@ -141,7 +140,7 @@ class Template(ABC):
         r_cells = []
         c = 1
         for col in row:
-            if c in self.ColsWithoutFormat:
+            if c in self.cols_without_format:
                 r_cells.append(
                     ECell(
                         text=col, 
@@ -179,7 +178,7 @@ class Template(ABC):
         return f"{get_column_letter(c)}{r}"
 
     def rawdata_to_worksheet(self, wb : Workbook, rows: list[list[str]] ):
-        from common.util import convert_type
+        import common.util as Util
         # 為了辨別ws是Worksheet加了: Worksheet
         ws :Worksheet = wb.create_sheet(self.rawdata_tab_name) 
         r = 1
@@ -187,7 +186,7 @@ class Template(ABC):
             c = 1
             for col in row:
                 cell = ws.cell(r,c)
-                cell.value = convert_type(col)
+                cell.value = Util.convert_type(col)
                 if not col:
                     self.null_val_loc.add(f"{r},{c}")
                 c += 1

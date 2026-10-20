@@ -1,8 +1,6 @@
+import math
 import pandas as pd
 from config import *
-
-# PRISUtilityKit.DBAL.Lib.Utils.Delimiter
-DELIMITER = "\x1c"
 
 class DataTableFormatter:
     def __init__(self,s1_h:str,s2_h:str,y_h:str,ex_list:list[str] = None):
@@ -14,7 +12,7 @@ class DataTableFormatter:
         self.s2_header: str = s2_h
         self.year_header: str = y_h
 
-    def add(self, df:pd.DataFrame, default_val:str = "0"):
+    def add(self, df:pd.DataFrame, default_val:str = "0", name:str | None = None):
         
         last_column_name = df.columns[-1]
 
@@ -27,15 +25,8 @@ class DataTableFormatter:
 
         # 5. 用 zip 打包成當前表格的字典
         current_dict = dict(zip(key_list, values))
-        self.table.append((current_dict, df.table_name, default_val))
+        self.table.append((current_dict, name if name is not None else df.table_name, default_val))
 
-        # str_dict: dict[tuple[str, ...], str] = {}
-        # for _,row in df.iterrows():
-        #     k = self.get_str_array(row, self.s1_header, self.s2_header,self.year_header, self.extenion)
-        #     self.set_data_dict[k] = True
-        #     str_dict[k] = str(row.iloc[len(df.columns)-1])
-
-        # self.table.append((str_dict, df.table_name, default_val))
 
     def create_data_frame(self, set_data_keys, s1: str, s2: str, s3: str, extension: list[str]) -> pd.DataFrame:
         # 1. 動態組合出所有的欄位名稱 (Headers)
@@ -140,7 +131,6 @@ class DataTableFormatter:
 
 ## 因為如果值是數字，用string方式寫入excel欄位，excel會跳警告(是數字還是文字)
 ## 所以如果是數字要先轉換才不會有警告
-@staticmethod
 def convert_type(text_value):
     # 若為空值或 None 直接回傳
     if not text_value:
@@ -158,12 +148,15 @@ def convert_type(text_value):
             return int(text_value)
             
         # 嘗試轉換成浮點數 (例如 "19.5")
-        return float(text_value)
+        value = float(text_value)
+        # [Bug fix] float() 也接受 "nan" / "inf" / "1_000" 這類字串,寫進 Excel 會變成無效值或改變原文
+        if not math.isfinite(value) or "_" in text_value:
+            return text_value
+        return value
     except ValueError:
         # 轉換失敗代表是純文字 (例如 "text")，直接回傳原字串
         return text_value
 
-@staticmethod
 def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int = 0, year_range:int = YEAR_RANGE, year_repeat:int = YEAR_REPEAT) -> list[str]:
     if year_list:
         int_years = [int(x) for x in year_list]
@@ -206,3 +199,12 @@ def org_serial_code_type(org_serial:str):
     if org_serial[13:15] == "00":
         return org_serial[:13] + "%"
     return org_serial
+
+def join_dataframes(df1, df2):
+    # 取得共同欄位
+    common_cols = list(set(df1.columns) & set(df2.columns))
+    # outer join
+    result = pd.merge(df1, df2, on=common_cols, how='outer', suffixes=('', '_dup'))
+    # 如果要移除重複欄位，可進一步處理
+    # result = result.loc[:,~result.columns.str.endswith('_dup')]
+    return result

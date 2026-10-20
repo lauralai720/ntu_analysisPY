@@ -1,4 +1,5 @@
-from dataclasses import field, dataclass
+
+from dataclasses import dataclass
 import re
 from enum import Enum
 
@@ -139,6 +140,8 @@ class PaperOrg:
     org_serial:str
     name_ch:str = ""
     name_en:str = ""
+    country: str=""
+
 
 class PaperOrg2nd(PaperOrg):
     def __init__(self, serial, name_ch_1, name_ch_2,name_ch_3,name_ch_4,name_en_1,name_en_2,name_en_3,name_en_4):
@@ -147,14 +150,6 @@ class PaperOrg2nd(PaperOrg):
         self.name_ch = self.get_name(name_ch_1, name_ch_2,name_ch_3,name_ch_4)
         self.name_en = self.get_name(name_en_1,name_en_2,name_en_3,name_en_4)
         
-        # self.name_ch_1 = name_ch_1
-        # self.name_ch_2 = name_ch_2
-        # self.name_ch_3 = name_ch_3
-        # self.name_ch_4 = name_ch_4
-        # self.name_en_1 = name_en_1
-        # self.name_en_2 = name_en_2
-        # self.name_en_3 = name_en_3
-        # self.name_en_4 = name_en_4
         
     def get_code_type(self) -> PaperOrg2ndCodeType:
         if self.org_serial[9:11] == "00":

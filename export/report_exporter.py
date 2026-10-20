@@ -51,8 +51,10 @@ class ReportExporter:
 
         try:
             wb.save(output_path)
-        except:
-            raise PRISError("檔案可能正被其他程式開啟,請先關閉後再試")
+        except PermissionError as e:      # [Bug fix] 裸 except 會把任何錯誤(含資料不合法、Ctrl+C)都說成「檔案被開啟」
+            raise PRISError("檔案可能正被其他程式開啟,請先關閉後再試") from e
+        except OSError as e:
+            raise PRISError(f"無法寫入檔案 {output_path}: {e}") from e
 
     def create_table_of_contents(self, wb: Workbook, templates: list[Template]):
         excel_report = ExcelReport()

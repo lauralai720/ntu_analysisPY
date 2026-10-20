@@ -1,10 +1,4 @@
-"""
-主程式進入點。
 
-注意這支檔案完全不需要 import clr、pythonnet、dotnet_setup,
-所有 .NET 相關細節都被封裝在 DataAccessLayer 裡面,
-main.py 只透過 get_dal() 拿到 DataAccessLayer,呼叫它提供的方法。
-"""
 import os
 print(f"================> MY PYTHON PID: {os.getpid()}")
 
@@ -63,6 +57,7 @@ def main():
         args = parser.parse_args()
         analysis_type = args.analysis_type
         output_path = args.output_path
+
         if analysis_type == 6:
             model_id = args.model_id
             main_version = args.main_version
@@ -97,14 +92,11 @@ def main():
             "source_name": source_name
         })
 
-
     try:
-        #export_file_path = run_report(analysis_type= analysis_type, model_id= model_id, main_version=main_version, compare_version=compare_version, output_path= output_path)
         export_file_path = run_report(**params)
         rprint(f"[green] {export_file_path} 匯出完成!! [/green]")
     except PRISError as e:
         rprint(f"[red]{e}[/red]")
-
 
 if __name__ == "__main__":
     main()

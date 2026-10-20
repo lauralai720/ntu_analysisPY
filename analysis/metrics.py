@@ -4,7 +4,6 @@ from dataclasses import dataclass,field
 from typing import Callable, Optional, TypeAlias
 from functools import cached_property
 import pandas as pd
-from datetime import datetime
 
 # PRIS 相關套件
 import common.db_schema as db_schema
@@ -12,8 +11,56 @@ from components.subjects import Subjects
 from dal_provider import get_dal
 from components.year_selector import ESIYear
 from common.util import DataTableFormatter
+from . import data_analysis as DataAnalysis
+from database import *
+from exceptions import PRISError
 
 dal = get_dal()
+
+def get_binds(
+        bind_subject1_column,
+        bind_subject2_column,
+        bind_year_column,
+        subjects : Subjects,
+        subject1_bind_column_name: str,
+        subject2_bind_column_name: str,
+        subject_year_bind_column_name: str,
+        extra_bind1_columns: dict | None = None,
+        extra_bind2_columns: dict | None = None,
+        extra_bind3_columns: dict | None = None,
+    ):
+
+        bind1 = None
+        if subjects.subject1 is not None:
+            bind1 = [Bind(subjects.subj1BindCol[subject1_bind_column_name], bind_subject1_column)]
+            if extra_bind1_columns is not None:
+                for key, value in extra_bind1_columns.items():
+                    if key in subjects.subj1BindCol:
+                        bind1.append(Bind(subjects.subj1BindCol[key], value))
+
+        bind2 = None
+        if subjects.subject2 is not None:
+            bind2 = [Bind(subjects.subj2BindCol[subject2_bind_column_name], bind_subject2_column)]
+            if extra_bind2_columns is not None:
+                for key, value in extra_bind2_columns.items():
+                    if key in subjects.subj2BindCol:
+                        bind2.append(Bind(subjects.subj2BindCol[key], value))
+
+        bind3 = None
+        if subjects.year is not None:
+            bind3 = [
+                Bind(
+                    subjects.yearBindCol[subject_year_bind_column_name],
+                    bind_year_column,
+                    use_default_collate=True,
+                )
+            ]
+            if extra_bind3_columns is not None:
+                for key, value in extra_bind3_columns.items():
+                    if key in subjects.yearBindCol:
+                        bind3.append(Bind(subjects.yearBindCol[key], value))
+
+        return bind1, bind2, bind3
 
 # 主區域
 # ================================================================
@@ -62,14 +109,11 @@ class ComputeObject:
 
     @property
     def query(self) -> "Query":
-        #dal = get_dal()
-
         bind_subj1_col = self.main_column if self.replace_bind_col_of_subject1 is None else self.replace_bind_col_of_subject1
         bind_subj2_col = self.main_column if self.replace_bind_col_of_subject2 is None else self.replace_bind_col_of_subject2
         bind_year_col = self.main_column if self.replace_bind_col_of_year is None else self.replace_bind_col_of_year
-        
 
-        bind1, bind2, bind3 = dal.get_binds(
+        bind1, bind2, bind3 = get_binds(
             bind_subject1_column= bind_subj1_col, 
             bind_subject2_column=bind_subj2_col,
             bind_year_column=bind_year_col,
@@ -82,23 +126,24 @@ class ComputeObject:
             extra_bind3_columns= self.extra_bind3_columns,
         )
 
-        q = dal.create_query(self.compute_table)
+        #q = dal.create_query(self.compute_table)
+        q = Query(self.compute_table)
 
         if bind1 is not None and self.bind_subject1:
-            q.SetSubject1(self.subjects.subject1, bind1)
+            q.set_subject1(self.subjects.subject1, bind1)
         if bind2 is not None and self.bind_subject2:
-            q.SetSubject2(self.subjects.subject2, bind2)
+            q.set_subject2(self.subjects.subject2, bind2)
         if bind3 is not None and self.bind_year:
-            q.SetSubject3(self.subjects.year, bind3)
+            q.set_subject3(self.subjects.year, bind3)
 
         if self.replace_subject1 is not None and self.bind_subject1:
-            q.SetSubject1(self.replace_subject1.subject, dal.create_bind(self.replace_subject1.bind_column, bind_subj1_col))
+            q.set_subject1(self.replace_subject1.subject, Bind(self.replace_subject1.bind_column, bind_subj1_col))
 
         if self.replace_subject2 is not None and self.bind_subject2:
-            q.SetSubject2(self.replace_subject2.subject, dal.create_bind(self.replace_subject2.bind_column, bind_subj1_col))
+            q.set_subject2(self.replace_subject2.subject, Bind(self.replace_subject2.bind_column, bind_subj1_col))
 
         if self.replace_subject3 is not None and self.bind_year:
-            q.SetSubject3(self.replace_subject3.subject, dal.create_bind(self.replace_subject3.bind_column, bind_subj1_col, {"UseDefaultCollate":True} ))
+            q.set_subject3(self.replace_subject3.subject, Bind(self.replace_subject3.bind_column, bind_subj1_col, use_default_collate=True))
 
         return q
 
@@ -124,24 +169,24 @@ class ComputeObject:
 
     ## 原 : public DataTable Count(bool RemoveSubjColumn = false, Column[] OrderBy = null, string CountFunc = "COUNT")
     def to_count(self, remove_subj_col : bool = False, orderby : list["Column"] = None, count_func = "COUNT"):
-        return self.query.Count(
+        return self.query.count(
             self.main_column, 
-            Distinct= self.distinct, 
-            KeepColumn = self.keep_column, 
-            OrderBy= orderby, 
-            Wheres= self.where_clauses, 
-            RemoveSubjColumn= remove_subj_col, 
-            CountFunc= count_func
+            distinct= self.distinct, 
+            keep_cols=self.keep_column, 
+            order_by= orderby, 
+            wheres= self.where_clauses, 
+            remove_subj_col= remove_subj_col, 
+            count_func= count_func,
         )
     ## 原 : public DataTable List(bool RemoveSubjColumn = false, Column[] OrderBy = null)
     def to_list(self, remove_subj_col : bool = False, orderby : list["Column"] = None):
         keep = self.keep_column
-        return self.query.Select(
-            Distinct= self.distinct, 
-            KeepColumn = keep, 
-            OrderBy= orderby, 
-            RemoveSubjColumn= remove_subj_col,
-            Wheres= self.where_clauses
+        return self.query.select(
+            distinct= self.distinct, 
+            keep_cols= keep, 
+            order_by= orderby, 
+            remove_subj_col= remove_subj_col,
+            wheres= self.where_clauses
         )
     
     def add_keep_col(self, columns, idx: int = None):
@@ -161,11 +206,11 @@ class ComputeObject:
 
         self.where_clauses.extend(inset_list)
 
-    def get_joined_right_table(self) :
-        return self.join_table.Right
+    def get_joined_right_table(self) -> Table :
+        return self.join_table.right
 
-    def get_joined_left_table(self):
-        return self.join_table.Left
+    def get_joined_left_table(self)-> Table:
+        return self.join_table.left
         
     
 @dataclass
@@ -178,8 +223,9 @@ class Metrics(ABC):
     get_where_clauses: Callable[["Table"], list["Where"]] = None
 
     def main_paper_count(self) -> pd.DataFrame:
-        res_dt = self.get_count(db_schema.schema.MainBindColumnName)
-        return dal.datatable_to_dataframe(res_dt)
+        res_df = self.get_count(db_schema.schema.MainBindColumnName)
+        return res_df
+        #return dal.datatable_to_dataframe(res_dt)
 
     def get_main_table_and_bind_col(self) -> tuple["Table", "Column"]:
         #dal = get_dal()
@@ -208,10 +254,21 @@ class Metrics(ABC):
             bind_year=self.bind_year,
         )
 
-    def get_compute_object_with_join_table(self, main_col_name:str, join_table_name:str, join_column_name:str, join_main_table_column_name:str, main_column_concat : list[str] | None = None, main_column_in_main_table : bool= False, join_type = dal.JOINTYPE.InnerJoin, dist:bool = True, func :str = ""):
+    def get_compute_object_with_join_table(self, 
+                                           main_col_name:str, 
+                                           join_table_name:str, 
+                                           join_column_name:str, 
+                                           join_main_table_column_name:str, 
+                                           main_column_concat : list[str] | None = None, 
+                                           main_column_in_main_table : bool= False, 
+                                           join_type = dal.JOINTYPE.InnerJoin, 
+                                           dist:bool = True, 
+                                           func :str = ""
+    ):
         (main_table, bind_column) = self.get_main_table_and_bind_col()
         join_main_col = main_table.RetrieveColumn(join_main_table_column_name)
-        table2 = dal.create_table(join_table_name)
+
+        table2 = Table(join_table_name)
         join_col = table2.RetrieveColumn(join_column_name)
 
         main_col_table = None
@@ -222,13 +279,13 @@ class Metrics(ABC):
             main_col_table = table2
 
         if main_column_concat:
-            main_col = main_col_table.RetrieveColumn(main_col_name, Concat = main_column_concat)
+            main_col = main_col_table.RetrieveColumn(main_col_name, concat=main_column_concat)
         else:
-            main_col = main_col_table.RetrieveColumn(main_col_name, Func = func)
+            main_col = main_col_table.RetrieveColumn(main_col_name, func=func)
         
 
-        on = dal.create_join_on(join_main_col, join_col)
-        join_table = dal.create_join_table(main_table, table2, join_type, on, Collate= "DATABASE_DEFAULT")
+        on = dal.create_join_on(left=join_main_col, right=join_col)
+        join_table = dal.create_join_table(left=main_table, right=table2, join_type=join_type, on=on, collate="DATABASE_DEFAULT")
         
         return ComputeObject(
             subjects = self.subjects,
@@ -244,10 +301,10 @@ class Metrics(ABC):
         )
         
 
-    def get_list(self, main_col_name: str, dist: bool = True):
+    def get_list(self, main_col_name: str, dist: bool = True) -> pd.DataFrame:
         return self.get_compute_object(main_col_name, dist).to_list()
 
-    def get_count(self, main_col_name:str, dist: bool = True, count_func="COUNT"):
+    def get_count(self, main_col_name:str, dist: bool = True, count_func="COUNT") -> pd.DataFrame:
         return self.get_compute_object(main_col_name, dist).to_count(count_func = count_func)
     
     
@@ -294,19 +351,19 @@ class ESIMetrics(Metrics):
     ### E1
     @cached_property
     def paper_count(self) -> pd.DataFrame:
-        res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.PaperCountColumnName, dist=False)))
+        res = DataAnalysis.a02_sumup_calculate(df = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.PaperCountColumnName, dist=False)))
         return res
+    
     @cached_property
     def world_paper_count_rank(self) -> pd.DataFrame:
         return self.world_rank(self.paper_count, self.get_world_rank_of_selected_version(db_schema.schema.PaperCountColumnName)) 
     @cached_property
     def asia_pacific_paper_count_rank(self) -> pd.DataFrame:
-        #return AsiaPacificRank(paperCount.Value, schema.PaperCountColumnName)
         return self.asia_pacific_rank(self.paper_count, db_schema.schema.PaperCountColumnName)
     ### E2
     @cached_property
     def cited(self) -> pd.DataFrame:
-        res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.CiteColumnName, dist=False)))
+        res = DataAnalysis.a02_sumup_calculate(df = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.CiteColumnName, dist=False)))
         return res
     @cached_property
     def world_cited_rank(self) -> pd.DataFrame:
@@ -321,12 +378,12 @@ class ESIMetrics(Metrics):
     ### E4
     @cached_property
     def hici(self) -> pd.DataFrame: 
-        res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.HighlyCitedPaperCountColumnName, dist=False)))
+        res = DataAnalysis.a02_sumup_calculate(df = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.HighlyCitedPaperCountColumnName, dist=False)))
         return res
     ### E5
     @cached_property
     def hot(self) -> pd.DataFrame:
-        res = dal.a02_sumup_calculate(dt = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.HotPaperColumnName, dist=False)))
+        res = DataAnalysis.a02_sumup_calculate(df = ESIMetrics.format_datetime_col(self.get_list(db_schema.schema.HotPaperColumnName, dist=False)))
         return res
 
     @cached_property
@@ -386,7 +443,7 @@ class ESIMetrics(Metrics):
             if self.subjects.subject2 is None:
                 ranking_list = version_field_rank[version][""]
             else:
-                field = str(row.iloc[1])
+                field = int(row.iloc[1])
                 ranking_list = version_field_rank[version][field]
 
             rank = ESIMetrics.binary_search_find_rank(ranking_list, num)
@@ -433,7 +490,7 @@ class ESIMetrics(Metrics):
                     if self.subjects.subject2 is None :
                         ranking_list = caller_get_rank(col_name=col_name, _=region, func=func, versions=versions)[ver][""]
                     else:
-                        field = str(row.iloc[1])
+                        field = row.iloc[1]
                         ranking_list = caller_get_rank(col_name=col_name, _=region, func=func, versions=versions)[ver][field]
 
                     rank = ESIMetrics.binary_search_find_rank(rank_list=ranking_list, goal_num=val)
@@ -494,7 +551,7 @@ class ESIMetrics(Metrics):
         cmd_str += f"WHERE EXISTS(SELECT * FROM {db_schema.schema.EsiAcAttrInfoTableName} AcInfo WHERE Inst.{db_schema.schema.InstitutionColumnName} = AcInfo.{db_schema.schema.EsiACColumnName} AND {region_str} AND {db_schema.schema.TimeEndColumnName} IS NULL) AND ({vers_str}) "
 
         if self.subjects.subject2 is not None:
-            condintions = "','".join(self.subj2_selected_fields)
+            condintions = "','".join([str(f) for f in self.subj2_selected_fields])
             cmd_str += f"AND {db_schema.schema.FIDColumnName} IN ('{condintions}')"
 
         cmd_str += f" GROUP BY {db_schema.schema.ESIUpdateTimeColumnName}, {db_schema.schema.InstitutionColumnName}{select_field_name}"
@@ -542,7 +599,7 @@ class ESIMetrics(Metrics):
         cmd_str += f"WHERE 1 = 1"
 
         if self.subjects.subject2 is not None:
-            condintions = "', '".join(self.subj2_selected_fields)
+            condintions = "', '".join([str(f) for f in self.subj2_selected_fields])
             cmd_str += f" AND {db_schema.schema.FIDColumnName} IN ('{condintions}')"
 
         if len(versions) > 0:
@@ -588,18 +645,16 @@ class ESIMetrics(Metrics):
         else:
             dtf = DataTableFormatter("S1", "S2", "Y")
 
-        df1.table_name = "Column1"
-        df2.table_name = "Column2"
-        dtf.add(df1)
-        dtf.add(df2)
+        dtf.add(df1, name="Column1")     # [整理] 不再對 DataFrame 動態加屬性(pandas 會警告、copy 後會消失)
+        dtf.add(df2, name="Column2")
 
-        res = dal.a08_cntavg_calculate(dtf.get_data_frame(), 2 + self.DECIMAL_PLACES if use_percent_age else self.DECIMAL_PLACES)
+        res = DataAnalysis.a08_cntavg_calculate(dtf.get_data_frame(), 2 + self.DECIMAL_PLACES if use_percent_age else self.DECIMAL_PLACES)
         res = res.drop(columns=["Column1","Column2"])
 
         if use_percent_age:
-            idx = len(res.columns)-1
-            for _, row in res.iterrows():
-                row.iloc[idx] = str(float(row.iloc[idx]) * 100) + "%"
+            # [Bug fix] iterrows() 給的是「複本」,對 row 賦值不會改到 res,這段原本完全沒有作用
+            last = res.columns[-1]
+            res[last] = res[last].map(lambda v: str(float(v) * 100) + "%")
 
         return res
 
@@ -607,40 +662,17 @@ class ESIMetrics(Metrics):
     ### Static method
     ### ==================
     @staticmethod
-    def format_datetime_col(dt : "DataTable"):
-        """
-        對應 C# 的 FormatDateTimeCol(DataTable dt)。
-        輸入輸出都是 .NET DataTable,因為結果要傳回給另一個 DLL function 使用。
-        """
-        import clr
-        import System
+    def format_datetime_col(df : pd.DataFrame) -> pd.DataFrame:
+        df_new = df.copy(deep=True)
+        datetime_cols = df_new.select_dtypes(include=['datetime64', 'datetime']).columns
+        for col in datetime_cols:
+            df_new[col] = df_new[col].dt.strftime('%Y-%m-%d')
 
-        ret = System.Data.DataTable()
-
-        for col in dt.Columns:
-            ret.Columns.Add(col.ColumnName)
-            if col.DataType == clr.GetClrType(System.DateTime):
-                ret.Columns[col.ColumnName].DataType = clr.GetClrType(System.String)
-            else:
-                ret.Columns[col.ColumnName].DataType = col.DataType
-
-        for row in dt.Rows:
-            nr = ret.NewRow()
-            for c in range(dt.Columns.Count):
-                if dt.Columns[c].DataType == clr.GetClrType(System.DateTime):
-                    nr[c] = row[c].ToString("yyyy-MM-dd")
-                else:
-                    nr[c] = row[c]
-            ret.Rows.Add(nr)
-
-        return ret
+        return df_new
     
     @staticmethod
-    def format_date_str(date_str: str) -> str:
-        """把 '2025/3/13 上午 12:00:00' 轉成 '2025-03-13' 字串"""
-        date_part = date_str.split(" ")[0]  # "2025/3/13"
-        dt = datetime.strptime(date_part, "%Y/%m/%d")
-        return dt.strftime("%Y-%m-%d")
+    def format_date_str(date: str) -> str:
+        return date.strftime("%Y-%m-%d")
 
     @staticmethod
     def get_vers_str(versions : list[ESIYear]) -> str :
@@ -667,6 +699,8 @@ class ESIMetrics(Metrics):
                 head = mid+1
                 continue
 
+        if not rank_list:                       # [Bug fix] 空清單原本是 IndexError
+            raise PRISError("排名清單為空,無法計算排名")
         if rank_list[head].number <= goal_num:
             return rank_list[head].rank
         else:
@@ -679,20 +713,10 @@ class PaperMetrics(Metrics):
         compute_object = self.get_compute_object_with_join_table(db_schema.schema.MainBindColumnName, db_schema.schema.CitationsCountTableName, db_schema.schema.MainBindColumnName, db_schema.schema.MainBindColumnName, dist=True)
         col_cited_count = compute_object.get_joined_right_table().RetrieveColumn(db_schema.schema.CitedCountColumnName)
         compute_object.add_keep_col(col_cited_count)
-        dt_ret = compute_object.to_list()
-        dt_ret.Columns.RemoveAt(dt_ret.Columns.Count - 2)
-        return dal.a02_sumup_calculate(dt_ret)
+        df_ret = compute_object.to_list()
+        df_ret = df_ret.drop(df_ret.columns[-2], axis=1)
 
-@dataclass
-class PatentMetrics(Metrics):
-    @cached_property
-    def cited(self) -> pd.DataFrame:
-        compute_object = self.get_compute_object_with_join_table(db_schema.schema.ReferColumnName, db_schema.schema.RefTableName, db_schema.schema.CitedColumnName, db_schema.schema.MainBindColumnName,join_type= dal.JOINTYPE.InnerJoin, dist=False)
-        ref_country_col = compute_object.get_joined_right_table().RetrieveColumn(db_schema.schema.RefCountryColumnName)
-        where_clause = dal.create_where_column_to_const(ref_country_col, dal.OPTYPE.Equal, "US")
-        compute_object.add_where_clause(where_clause)
-        res = dal.datatable_to_dataframe(compute_object.to_count())
-        return res
+        return DataAnalysis.a02_sumup_calculate(df=df_ret)
 
 from common.year import Year
 
@@ -724,7 +748,7 @@ class GrowthRate(Metrics):
 
         return pre_year_list
 
-    def calculate_growth_rate(self, input_data, use_percentage: bool = True, na_val_notation=None) -> pd.DataFrame:
+    def calculate_growth_rate(self, input_data, use_percent_age: bool = True, na_val_notation=None) -> pd.DataFrame:
         if self.subjects.subject1 is None:
             y_idx = 0
         elif self.subjects.subject2 is None:
@@ -738,8 +762,8 @@ class GrowthRate(Metrics):
         def pre_y_func(x: str) -> str:
             return str(Year(x).add(-1))
 
-        df_ret = dal.growth_rate_calculate(
-            input_data, y_idx, self.ori_year_list, pre_y_func, use_percentage, na_val_notation
+        df_ret = DataAnalysis.growth_rate_calculate(
+            input_data, y_idx, self.ori_year_list, pre_y_func, use_percent_age, na_val_notation
         )
         return df_ret
 
@@ -766,8 +790,8 @@ class PaperList(Metrics):
         if keep_column is not None:
             compute_object.add_keep_col(keep_column, 0)
 
-        dt = compute_object.to_list(remove_subj_column)
-        df = dal.datatable_to_dataframe(dt)
+        df = compute_object.to_list(remove_subj_column)
+        #df = dal.datatable_to_dataframe(dt)
 
         columns = df.columns.tolist()
 
@@ -782,15 +806,15 @@ class PaperList(Metrics):
 @dataclass
 class PaperGrowthRateMetric(GrowthRate):
     def paper(self, use_percent_age : bool = True, na_val_notation = None)-> pd.DataFrame:
-        return self.calculate_growth_rate(self.main_paper_count(), use_percentage=use_percent_age, na_val_notation=na_val_notation)
+        return self.calculate_growth_rate(self.main_paper_count(), use_percent_age=use_percent_age, na_val_notation=na_val_notation)
 
 @dataclass 
 class Indicator(Metrics):
     @property
-    def list_metrics(self) -> Metrics:
+    def list_metrics(self) -> PaperList:
         return None
     @property
-    def metrics(self) -> Metrics:
+    def metrics(self) -> PaperMetrics:
         return None
     
     @cached_property
@@ -799,19 +823,19 @@ class Indicator(Metrics):
 
     def avg_cited(self, df_cited : pd.DataFrame = None) -> pd.DataFrame:
         df_num = self.metrics.main_paper_count()
-        if not df_cited:
+        if df_cited is None:      # [Bug fix] `not DataFrame` 會丟 ValueError(truth value is ambiguous)
             df_cited = self.metrics.cited
         
         subj_columns = [f"subj{i}" for i in range(self.subjects.subject_num)]
         df_num.columns = subj_columns + ["Num"]
         df_cited.columns = subj_columns + ["Cited"]
 
-        res = dal.a08_cntavg_calculate_join(df_cited, df_num)
+        res = DataAnalysis.a08_cntavg_calculate_join(df_cited, df_num)
         res = res.drop(columns=["Num","Cited"])
         return res
 
-    def h_index(self) -> pd.DataFrame:
-        return dal.b06_h_index_calculate(self.hIndex_hcore_cited_count)
+    # def h_index(self) -> pd.DataFrame:
+    #     return DataAnalysis.b06_h_index_calculate(self.hIndex_hcore_cited_count)
 
 @dataclass
 class PaperIndicator(Indicator):

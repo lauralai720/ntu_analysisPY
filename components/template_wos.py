@@ -1,12 +1,7 @@
-## PRISAnalyzer.PresidentReportESI.Class.Analysis.Templates.Template
-from dataclasses import dataclass, field
-from openpyxl.utils import get_column_letter
-
-
 #config
 from config import *
-from components.template import Template,TemplateType
-from common.util import get_year_range_list
+from components.template import Template
+import common.util as Util
 
 # PRIS
 from export.excel_report import *
@@ -20,13 +15,13 @@ class Template_WOS(Template):
         self.DefaultExcelFuncInteger = "=TEXT({0},\"#,##0\")"
 
     @property
-    def ColsWithoutFormat(self) -> set[int]:
+    def cols_without_format(self) -> set[int]:
         return self._cols_without_format
 
     @classmethod
     def set_year_list(cls, years: list[str]):
         cls._year_list = years
-        cls._year_range_list = get_year_range_list(years)
+        cls._year_range_list = Util.get_year_range_list(years)
 
     @classmethod
     def get_year_list(cls, is_range:bool = False) -> list[str]:
@@ -78,9 +73,9 @@ class Template_WOS(Template):
     def get_cell_row(self, r:int, row : list[str]) -> list[ECell] :
         r_cells = []
         c = 1
-        basic_count = len(self.ColsWithoutFormat)
+        basic_count = len(self.cols_without_format)
         for col in row:
-            if c in self.ColsWithoutFormat:
+            if c in self.cols_without_format:
                 r_cells.append(
                     ECell(
                         text=col, 
@@ -129,9 +124,9 @@ class S1(Template_WOS):
     def get_cell_row(self, r:int, row : list[str]) -> list[ECell] :
         r_cells = []
         c = 1
-        basic_count = len(self.ColsWithoutFormat)
+        basic_count = len(self.cols_without_format)
         for col in row:
-            if c in self.ColsWithoutFormat:
+            if c in self.cols_without_format:
                 r_cells.append(
                     ECell(
                         text=col, 
@@ -193,9 +188,9 @@ class S2(Template_WOS):
     def get_cell_row(self, r:int, row : list[str]) -> list[ECell] :
         r_cells = []
         c = 1
-        basic_count = len(self.ColsWithoutFormat)
+        basic_count = len(self.cols_without_format)
         for col in row:
-            if c in self.ColsWithoutFormat:
+            if c in self.cols_without_format:
                 r_cells.append(
                     ECell(
                         text=col, 
@@ -332,10 +327,10 @@ class S6(Template_WOS):
         # 前三個是機構，需要垂直合併，垂直合併數字要看year
         # 第4格式年分，無公式
         # 後面6格是公式，看_excel_func填上
-        basic_count = len(self.ColsWithoutFormat)
+        basic_count = len(self.cols_without_format)
         y_total = self.get_year_count()
         for col in row:
-            if c in self.ColsWithoutFormat and c != 4 :
+            if c in self.cols_without_format and c != 4 :
                 if (r % y_total) == 1 : 
                     r_cells.append(
                         ECell(
@@ -420,10 +415,10 @@ class S7(Template_WOS):
         # 前三個是機構，需要垂直合併，垂直合併數字要看year
         # 第4格式有
 
-        basic_count = len(self.ColsWithoutFormat)
+        basic_count = len(self.cols_without_format)
         merge_row = 3
         for col in row:
-            if c in self.ColsWithoutFormat and c != 4 :
+            if c in self.cols_without_format and c != 4 :
                 if (r % merge_row) == 1 : 
                     r_cells.append(
                         ECell(

@@ -2,14 +2,14 @@
 from dataclasses import dataclass, field
 from openpyxl.utils import get_column_letter
 
-
 #config
 from config import *
 from components.template import Template,TemplateType
 
 # PRIS
 from export.excel_report import *
-#
+from components import PaperOrg
+
 class Template_ESI(Template):
     def __init__(self, sheet_name: str, main_ver: str, comp_ver: str, sheet_index: int):
         super().__init__(sheet_name, sheet_index)  # 對應 : base(...)
@@ -325,7 +325,7 @@ class E7(E6):
         return "被引次數"
 
 class F1(Template_ESI):
-    def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
+    def __init__(self, sheet_name: str, main_ver: str, orgs:list["PaperOrg"], sheet_index: int):
         super().__init__(sheet_name, main_ver, "", sheet_index)  # 對應 : base(...)
         self.orgs = orgs
         self.template_type = TemplateType.F1
@@ -338,14 +338,14 @@ class F1(Template_ESI):
     def RankingType(self) -> str:
         return "世界排名"
 
-    def create_org_header_tree(self,org: "OrgInfo") -> ExcelColumnHeader:
+    def create_org_header_tree(self,org: "PaperOrg") -> ExcelColumnHeader:
         bottom_headers = [
             ExcelColumnHeader(name="論文篇數",width=12),
             ExcelColumnHeader(name=self.RankingType, width=10),
             ExcelColumnHeader(name="排名變化", width=10)
         ]
-        org_en_header = ExcelColumnHeader(name = org.org_name_en,wrap_text=True, max_char=29,height_per_row=17.75,sub_headers=bottom_headers)
-        org_ch_header = ExcelColumnHeader(name = org.org_name_ch,wrap_text=True, max_char=29,height_per_row=17.75,sub_headers=[org_en_header])
+        org_en_header = ExcelColumnHeader(name = org.name_en,wrap_text=True, max_char=29,height_per_row=17.75,sub_headers=bottom_headers)
+        org_ch_header = ExcelColumnHeader(name = org.name_ch,wrap_text=True, max_char=29,height_per_row=17.75,sub_headers=[org_en_header])
         country_header = ExcelColumnHeader(name = org.country,sub_headers=[org_ch_header])
         top_header = ExcelColumnHeader(name = org.org_serial,sub_headers=[country_header])
 
@@ -416,7 +416,7 @@ class F1(Template_ESI):
         return r_cells
 
 class F2(F1):
-    def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
+    def __init__(self, sheet_name: str, main_ver: str, orgs:list["PaperOrg"], sheet_index: int):
         super().__init__(sheet_name, main_ver, orgs, sheet_index)  # 對應 : base(...)
         self.template_type = TemplateType.F2
 
@@ -425,7 +425,7 @@ class F2(F1):
         return "亞太排名"
 
 class F3(Template_ESI):
-    def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
+    def __init__(self, sheet_name: str, main_ver: str, orgs:list["PaperOrg"], sheet_index: int):
         super().__init__(sheet_name, main_ver, "", sheet_index)  # 對應 : base(...)
         self.orgs = orgs
         self.template_type = TemplateType.F3
@@ -442,15 +442,15 @@ class F3(Template_ESI):
     def rows_count(self) -> int:
         return len(self.rows)
 
-    def create_org_header_tree(self,org: "OrgInfo") -> ExcelColumnHeader:
+    def create_org_header_tree(self,org: "PaperOrg") -> ExcelColumnHeader:
         bottom_headers = [
             ExcelColumnHeader(name="被引次數",width=15),
             ExcelColumnHeader(name=self.RankingType, width=10),
             ExcelColumnHeader(name="排名變化", width=10),
             ExcelColumnHeader(name="平均被引", width=10)
         ]
-        org_en_header = ExcelColumnHeader(name = org.org_name_en,wrap_text=True, max_char=38,height_per_row=17.75,sub_headers=bottom_headers)
-        org_ch_header = ExcelColumnHeader(name = org.org_name_ch,wrap_text=True, max_char=38,height_per_row=17.75,sub_headers=[org_en_header])
+        org_en_header = ExcelColumnHeader(name = org.name_en,wrap_text=True, max_char=38,height_per_row=17.75,sub_headers=bottom_headers)
+        org_ch_header = ExcelColumnHeader(name = org.name_ch,wrap_text=True, max_char=38,height_per_row=17.75,sub_headers=[org_en_header])
         country_header = ExcelColumnHeader(name = org.country,sub_headers=[org_ch_header])
         top_header = ExcelColumnHeader(name = org.org_serial,sub_headers=[country_header])
 
@@ -547,7 +547,7 @@ class F3(Template_ESI):
         return r_cells
 
 class F4(F3):
-    def __init__(self, sheet_name: str, main_ver: str, orgs:list["OrgInfo"], sheet_index: int):
+    def __init__(self, sheet_name: str, main_ver: str, orgs:list["PaperOrg"], sheet_index: int):
         super().__init__(sheet_name, main_ver, orgs, sheet_index)  # 對應 : base(...)
         self.template_type = TemplateType.F4
 
