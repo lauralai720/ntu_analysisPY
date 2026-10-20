@@ -142,7 +142,7 @@ class PresidentESIReportItem:
         return Util.get_num_ch(i)
 
 @dataclass
-class Anaysis:
+class Analysis:
     name : str = ""
     subjects : Subjects = None
 
@@ -155,7 +155,7 @@ class FieldSubjectType:
 
 
 @dataclass
-class PresidentESIAnalysis(Anaysis):
+class PresidentESIAnalysis(Analysis):
     main_ver : str = ""
     comp_ver : str = ""
     main_ver_short : str = ""
@@ -617,35 +617,31 @@ class PresidentESIAnalysis(Anaysis):
         re_export.export(output_path)
         return output_path
 
-
+    # 產出報表的數據
     def generate_report(self, item : PresidentESIReportItem, sheet_name : str) -> tuple[Template, list[list[str]]] :
-        #sheet_name = sheet_name#item.to_sheet_name()
         template_type : TemplateType= item.Type
         idx = item.Index
 
         builders = {
-            TemplateType.E1: lambda: (E1(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e1_rows()),
-            TemplateType.E2: lambda: (E2(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e2_rows()),
-            TemplateType.E3: lambda: (E3(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e3_rows()),
-            TemplateType.E4: lambda: (E4(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e4_rows()),
-            TemplateType.E5: lambda: (E5(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e5_rows()),
-            TemplateType.E6: lambda: (E6(sheet_name, self.maj_fields_name_and_sub_fields_name, idx), self.get_e6_rows()),
-            TemplateType.E7: lambda: (E7(sheet_name, self.maj_fields_name_and_sub_fields_name, idx), self.get_e7_rows()),
-            TemplateType.F1: lambda: (F1(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f1_rows()),
-            TemplateType.F2: lambda: (F2(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f2_rows()),
-            TemplateType.F3: lambda: (F3(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f3_rows()),
-            TemplateType.F4: lambda: (F4(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f4_rows()),
-            TemplateType.F5: lambda: (F5(sheet_name, idx), self.get_f5_rows()),
-            TemplateType.F6: lambda: (F6(sheet_name, idx), self.get_f6_rows()),
+            TemplateType.E1: lambda: (E1(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e1_rows()), # ESI全領域論文總數及排名 
+            TemplateType.E2: lambda: (E2(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e2_rows()), # ESI全領域論文被引次數及排名
+            TemplateType.E3: lambda: (E3(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e3_rows()), # ESI全領域論文平均被引次數及排名
+            TemplateType.E4: lambda: (E4(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e4_rows()), # ESI高被引論文數及比率 
+            TemplateType.E5: lambda: (E5(sheet_name, self.main_ver, self.comp_ver, idx), self.get_e5_rows()), # ESI熱門論文數
+            TemplateType.E6: lambda: (E6(sheet_name, self.maj_fields_name_and_sub_fields_name, idx), self.get_e6_rows()), # ESI分領域論文總數及排名
+            TemplateType.E7: lambda: (E7(sheet_name, self.maj_fields_name_and_sub_fields_name, idx), self.get_e7_rows()), # ESI分領域論文被引次數及排名
+            TemplateType.F1: lambda: (F1(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f1_rows()), # ESI分領域論文總數及世界排名
+            TemplateType.F2: lambda: (F2(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f2_rows()), # ESI分領域論文總數及亞太排名
+            TemplateType.F3: lambda: (F3(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f3_rows()), # ESI分領域論文被引次數、平均被引次數及世界排名
+            TemplateType.F4: lambda: (F4(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f4_rows()), # ESI分領域論文被引次數、平均被引次數及亞太排名
+            TemplateType.F5: lambda: (F5(sheet_name, idx), self.get_f5_rows()), # ESI分領域論文總數前3名
+            TemplateType.F6: lambda: (F6(sheet_name, idx), self.get_f6_rows()), # ESI分領域論文被引次數前3名
         }
 
         if template_type not in builders:
-            # raise ValueError(f"未知的 type:{template_type}")
-            #print(f"未知的 type:{template_type}")
             raise PRISError(f"未知的TemplateType:{template_type}")
-            #return tmpl, temp_rows
 
-        tmpl, temp_rows = builders[template_type]()
+        tmpl, temp_rows = builders[template_type]() # 執行並產生報表的資料存到template裡面
         return tmpl, temp_rows
 
     def get_e1_rows(self) -> list[list[str]] :

@@ -19,7 +19,7 @@ from export.report_exporter import *
 from analysis.metrics import *
 from components.esi_field import * 
 from exceptions import PRISError
-from analysis.president_esi_analysis import Anaysis,ResettableLazy
+from analysis.president_esi_analysis import Analysis,ResettableLazy
 from exceptions import PRISError
 
 dal = get_dal()   # [整理] 原本靠 `import *` 連帶帶進來的 dal,改為明確宣告
@@ -76,7 +76,7 @@ class PresidentWOSReportItem:
 
 
 @dataclass
-class PresidentWOSAnalysis(Anaysis):
+class PresidentWOSAnalysis(Analysis):
     get_where_clauses: Callable[["Table"], list["Where"]] = None
     min_year : str = ""
     max_year : str = ""
@@ -464,15 +464,15 @@ class PresidentWOSAnalysis(Anaysis):
         sheet_name = item.sheet_name
         tab_name = item.tab_name
         builders = {
-            TemplateType.S1: lambda: (S1(sheet_name,idx,tab_name), self.get_s1_rows()),
-            TemplateType.S2: lambda: (S2(sheet_name,idx,tab_name), self.get_s2_rows()),
-            TemplateType.S3: lambda: (S3(sheet_name,idx,tab_name), self.get_s3_rows()),
-            TemplateType.S4: lambda: (S4(sheet_name,idx,tab_name), self.get_s4_rows()),
-            TemplateType.S5: lambda: (S5(sheet_name,idx,tab_name), self.get_s5_rows()),
-            TemplateType.S6: lambda: (S6(sheet_name,idx,tab_name), self.get_s6_rows()),
-            TemplateType.S7: lambda: (S7(sheet_name,idx,tab_name), self.get_s7_rows()),
+            TemplateType.S1: lambda: (S1(sheet_name,idx,tab_name), self.get_s1_rows()), # WOS 論文數統計及成長率
+            TemplateType.S2: lambda: (S2(sheet_name,idx,tab_name), self.get_s2_rows()), # WOS 論文數統計及FirstAuthorAndReprint論文數及比率
+            TemplateType.S3: lambda: (S3(sheet_name,idx,tab_name), self.get_s3_rows()), # WOS 論文被引次數及FirstAuthorAndReprint論文被引次數及比率
+            TemplateType.S4: lambda: (S4(sheet_name,idx,tab_name), self.get_s4_rows()), # WOS 論文成長率
+            TemplateType.S5: lambda: (S5(sheet_name,idx,tab_name), self.get_s5_rows()), # WOS 平均被引次數統計
+            TemplateType.S6: lambda: (S6(sheet_name,idx,tab_name), self.get_s6_rows()), # WOS SCIE、SSCI、A&HCI 各自的論文數及論文成長率
+            TemplateType.S7: lambda: (S7(sheet_name,idx,tab_name), self.get_s7_rows()), # WOS 論文數統計、高影響期刊係數IF值
             #TemplateType.S8: lambda: (S8(sheet_name,idx,tab_name), self.get_s8_rows()), #暫不製作
-            TemplateType.S9: lambda: (S9(sheet_name,idx,tab_name), self.get_s9_rows()),
+            TemplateType.S9: lambda: (S9(sheet_name,idx,tab_name), self.get_s9_rows()), # WOS 三年論文成長率
         }
 
         if template_type not in builders:
