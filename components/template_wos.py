@@ -8,6 +8,10 @@ from export.excel_report import *
 #
 class Template_WOS(Template):
     _year_list: list[str] = []
+    header_org_serial = "機構編碼"
+    header_org_name_1 = "機構名稱1"
+    header_org_name_2 = "機構名稱2"
+
     def __init__(self, sheet_name: str, sheet_index: int, tab_name :str):
         super().__init__(sheet_name, sheet_index)  # 對應 : base(...)
         self.tab_name = tab_name
@@ -40,11 +44,11 @@ class Template_WOS(Template):
         report = ExcelReport()
         banner=ExcelColumnHeader(name=self.sheet_name, horizontal_align="center")
         serial_top = ExcelColumnHeader()
-        serial_top.sub_headers = [ExcelColumnHeader(name="機構編碼", horizontal_align= "left", width=15)]
+        serial_top.sub_headers = [ExcelColumnHeader(name=self.header_org_serial, horizontal_align= "left", width=15)]
         serial_name1_top = ExcelColumnHeader()
-        serial_name1_top.sub_headers= [ExcelColumnHeader(name="機構名稱1", horizontal_align= "left", width=15)]
+        serial_name1_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_1, horizontal_align= "left", width=15)]
         serial_name2_top = ExcelColumnHeader()
-        serial_name2_top.sub_headers= [ExcelColumnHeader(name="機構名稱2", horizontal_align= "left", width=15)]
+        serial_name2_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_2, horizontal_align= "left", width=15)]
         years = self.get_year_list()
         years_headers = []
         for y in years :
@@ -106,11 +110,11 @@ class S1(Template_WOS):
         report = ExcelReport()
         banner=ExcelColumnHeader(name=self.sheet_name, horizontal_align="center")
         serial_top = ExcelColumnHeader()
-        serial_top.sub_headers = [ExcelColumnHeader(name="機構編碼", horizontal_align= "left", width=15)]
+        serial_top.sub_headers = [ExcelColumnHeader(name=self.header_org_serial, horizontal_align= "left", width=15)]
         serial_name1_top = ExcelColumnHeader()
-        serial_name1_top.sub_headers= [ExcelColumnHeader(name="機構名稱1", horizontal_align= "left", width=15)]
+        serial_name1_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_1, horizontal_align= "left", width=15)]
         serial_name2_top = ExcelColumnHeader()
-        serial_name2_top.sub_headers= [ExcelColumnHeader(name="機構名稱2", horizontal_align= "left", width=15)]
+        serial_name2_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_2, horizontal_align= "left", width=15)]
         years = self.get_year_list()
         years_headers = []
         for y in years :
@@ -170,11 +174,11 @@ class S2(Template_WOS):
         report = ExcelReport()
         banner=ExcelColumnHeader(name=self.sheet_name, horizontal_align="center")
         serial_top = ExcelColumnHeader()
-        serial_top.sub_headers = [ExcelColumnHeader(name="機構編碼", horizontal_align= "left", width=15)]
+        serial_top.sub_headers = [ExcelColumnHeader(name=self.header_org_serial, horizontal_align= "left", width=15)]
         serial_name1_top = ExcelColumnHeader()
-        serial_name1_top.sub_headers= [ExcelColumnHeader(name="機構名稱1", horizontal_align= "left", width=15)]
+        serial_name1_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_1, horizontal_align= "left", width=15)]
         serial_name2_top = ExcelColumnHeader()
-        serial_name2_top.sub_headers= [ExcelColumnHeader(name="機構名稱2", horizontal_align= "left", width=15)]
+        serial_name2_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_2, horizontal_align= "left", width=15)]
         years = self.get_year_list()
         years_headers = []
         for y in years :
@@ -189,6 +193,7 @@ class S2(Template_WOS):
         r_cells = []
         c = 1
         basic_count = len(self.cols_without_format)
+        str_format ="=TEXT({0},\"#,##0\")&CHAR(10)&\"(\"&TEXT({1},\"#,##0\")&\";\"&TEXT({2},\"0%\")&\")\""
         for col in row:
             if c in self.cols_without_format:
                 r_cells.append(
@@ -201,7 +206,7 @@ class S2(Template_WOS):
                 )
             elif ((c-basic_count-1) % 3) == 0:
                 origial_c = c-basic_count
-                str_format ="=TEXT({0},\"#,##0\")&CHAR(10)&\"(\"&TEXT({1},\"#,##0\")&\";\"&TEXT({2},\"0%\")&\")\""
+                
                 r_cells.append(
                     ECell(
                         text=str_format.format(self.get_cell_loc_str(r,origial_c), self.get_cell_loc_str(r,origial_c+1), self.get_cell_loc_str(r,origial_c+2)), 
@@ -229,11 +234,11 @@ class S4(Template_WOS):
         report = ExcelReport()
         banner=ExcelColumnHeader(name=self.sheet_name, horizontal_align="center")
         serial_top = ExcelColumnHeader()
-        serial_top.sub_headers = [ExcelColumnHeader(name="機構編碼", horizontal_align= "left", width=15)]
+        serial_top.sub_headers = [ExcelColumnHeader(name=self.header_org_serial, horizontal_align= "left", width=15)]
         serial_name1_top = ExcelColumnHeader()
-        serial_name1_top.sub_headers= [ExcelColumnHeader(name="機構名稱1", horizontal_align= "left", width=15)]
+        serial_name1_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_1, horizontal_align= "left", width=15)]
         serial_name2_top = ExcelColumnHeader()
-        serial_name2_top.sub_headers= [ExcelColumnHeader(name="機構名稱2", horizontal_align= "left", width=15)]
+        serial_name2_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_2, horizontal_align= "left", width=15)]
         years = self.get_year_list()
         years_headers = []
         for y in years :
@@ -285,11 +290,11 @@ class S6(Template_WOS):
         report = ExcelReport()
 
         headers = []
-        serial_top = ExcelColumnHeader(name="機構編碼", horizontal_align= "center", width=15)
+        serial_top = ExcelColumnHeader(name=self.header_org_serial, horizontal_align= "center", width=15)
 
-        serial_name1_top=ExcelColumnHeader(name="機構名稱1", horizontal_align= "center", width=15)
+        serial_name1_top=ExcelColumnHeader(name=self.header_org_name_1, horizontal_align= "center", width=15)
 
-        serial_name2_top=ExcelColumnHeader(name="機構名稱2", horizontal_align= "center", width=15)
+        serial_name2_top=ExcelColumnHeader(name=self.header_org_name_2, horizontal_align= "center", width=15)
         year = ExcelColumnHeader(width=12)
 
         headers = [serial_top, serial_name1_top, serial_name2_top, year]
@@ -366,19 +371,21 @@ class S6(Template_WOS):
 
 class S7(Template_WOS):
     
-    def __init__(self, sheet_name, sheet_index, tab_name):
+    def __init__(self, sheet_name, sheet_index, tab_name, if_1_val, if_2_val):
         super().__init__(sheet_name, sheet_index, tab_name)
         self.source : list[str] = ["SCIE", "SSCI", "AHCI"]
         self._cols_without_format: set[int] = {1, 2, 3, 4}
-
+        self.if_1_val = if_1_val
+        self.if_2_val = if_2_val
+        self.sheet_name = self.sheet_name.format(if_1_val,if_2_val)
 
     def get_report(self) -> ExcelReport:
         report = ExcelReport()
 
         headers = []
-        serial_top = ExcelColumnHeader(name="機構編碼",  width=15)
-        serial_name1_top=ExcelColumnHeader(name="機構名稱1", width=15)
-        serial_name2_top=ExcelColumnHeader(name="機構名稱2", width=15)
+        serial_top = ExcelColumnHeader(name=self.header_org_serial,  width=15)
+        serial_name1_top=ExcelColumnHeader(name=self.header_org_name_1, width=15)
+        serial_name2_top=ExcelColumnHeader(name=self.header_org_name_2, width=15)
         desc_header = ExcelColumnHeader(width=20)
      
         years = self.get_year_list()
@@ -414,7 +421,9 @@ class S7(Template_WOS):
         c = 1
         # 前三個是機構，需要垂直合併，垂直合併數字要看year
         # 第4格式有
-
+        if_1_col_name = f"IF值{self.if_1_val}%論文數"
+        if_2_col_name = f"IF值{self.if_2_val}%論文數"
+        prcent_col_format ="=TEXT({0},\"#,##0\")&\"(\"&TEXT({1},\"0.0%\")&\")\""
         basic_count = len(self.cols_without_format)
         merge_row = 3
         for col in row:
@@ -442,7 +451,7 @@ class S7(Template_WOS):
                 elif r % merge_row == 2:
                     r_cells.append(
                         ECell(
-                            text="IF值15%論文數", 
+                            text=if_1_col_name,
                             vertical_align=self.DefaultCellVerticalAlignment,
                             horizontal_align=self.DefaultCellHorizontalAlignment
                         )
@@ -450,14 +459,14 @@ class S7(Template_WOS):
                 else:
                     r_cells.append(
                         ECell(
-                            text="IF值30%論文數", 
+                            text=if_2_col_name, 
                             vertical_align=self.DefaultCellVerticalAlignment,
                             horizontal_align=self.DefaultCellHorizontalAlignment
                         )
                     )
             else:
                 origial_c = c-basic_count
-                prcent_str_format ="=TEXT({0},\"#,##0\")&\"(\"&TEXT({1},\"0.0%\")&\")\""
+                
                 if r % merge_row == 1:
                     r_cells.append(
                         ECell(
@@ -470,7 +479,7 @@ class S7(Template_WOS):
                     if (origial_c % 2) == 1:
                         r_cells.append(
                             ECell(
-                                text=prcent_str_format.format(self.get_cell_loc_str(r,origial_c),self.get_cell_loc_str(r,origial_c+1)),
+                                text=prcent_col_format.format(self.get_cell_loc_str(r,origial_c),self.get_cell_loc_str(r,origial_c+1)),
                                 vertical_align=self.DefaultCellVerticalAlignment,
                                 horizontal_align=self.DefaultCellHorizontalAlignment
                             )
@@ -488,11 +497,11 @@ class S9(S4):
         report = ExcelReport()
         banner=ExcelColumnHeader(name=self.sheet_name, horizontal_align="center")
         serial_top = ExcelColumnHeader()
-        serial_top.sub_headers = [ExcelColumnHeader(name="機構編碼", horizontal_align= "left", width=15)]
+        serial_top.sub_headers = [ExcelColumnHeader(name=self.header_org_serial, horizontal_align= "left", width=15)]
         serial_name1_top = ExcelColumnHeader()
-        serial_name1_top.sub_headers= [ExcelColumnHeader(name="機構名稱1", horizontal_align= "left", width=15)]
+        serial_name1_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_1, horizontal_align= "left", width=15)]
         serial_name2_top = ExcelColumnHeader()
-        serial_name2_top.sub_headers= [ExcelColumnHeader(name="機構名稱2", horizontal_align= "left", width=15)]
+        serial_name2_top.sub_headers= [ExcelColumnHeader(name=self.header_org_name_2, horizontal_align= "left", width=15)]
         years = self.get_year_list(is_range=True)
         years_headers = []
         for y in years :

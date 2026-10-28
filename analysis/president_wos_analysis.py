@@ -10,17 +10,12 @@ from dal_provider import get_dal
 import common.db_schema as db_schema
 from common.year import Year
 import common.util as Util
-from components.year_selector import WOSYearSelector
-from components.template import *
+from components import *
 from components.template_wos import *
-from components.paper_org_value import AuthorIndex
-from components.subject_info import GetSubject, PaperJcrIFSubjectInfo, PaperOrgSelectedValue
 from export.report_exporter import *
 from analysis.metrics import *
-from components.esi_field import * 
 from exceptions import PRISError
 from analysis.president_esi_analysis import Analysis,ResettableLazy
-from exceptions import PRISError
 
 dal = get_dal()   # [整理] 原本靠 `import *` 連帶帶進來的 dal,改為明確宣告
 
@@ -32,16 +27,16 @@ class WOSTarget(Enum):
     AsiaPacific = 5
 
 ## [ TabName(分頁標題), SheetName(表格標題)]，非list的就是一樣的
-TemplateNameMapping = {
+TemplateNameMapping:dict[TemplateType, str|list[str]] = {
     TemplateType.S1 : ["歷年上半年論文數統計","論文數統計"],
     TemplateType.S2 : "論文數統計",
     TemplateType.S3 : "被引次數統計",
     TemplateType.S4 : ["論文成長率","逐年論文成長率"],
     TemplateType.S5 : "平均被引用次數統計",
     TemplateType.S6 : "論文數及成長率",
-    TemplateType.S7 : "高影響期刊係數前15%及30%論文數",
+    TemplateType.S7 : "高影響期刊係數前{0}%及{1}%論文數",
     TemplateType.S8 : "H指數",
-    TemplateType.S9 : ["三年論文成長率","三年論文成長率"],
+    TemplateType.S9 : ["{0}年論文成長率","{0}年論文成長率"],
 }
 
 TargetSheetHeader = {
@@ -59,24 +54,12 @@ YEAR_MAP: TypeAlias = dict[str, float]
 PAPER_COUNT="paper_count"
 GROWTH_RATE="growth_rate"
 
-@dataclass
-class PresidentWOSReport:
-    project_name: str = "" # file_name
-    shown_time: str = ""
-    items : list["PresidentWOSReportItem"] = field(default_factory=list)
-    year_list : list[str] = field(default_factory=list)
-    output_path : str = ""
-
-@dataclass
-class PresidentWOSReportItem:
-    type : TemplateType
-    tab_name: str    # excel 工作表名稱
-    sheet_name:str   # 報表上方的名稱
-    index: int = 0
-
 
 @dataclass
 class PresidentWOSAnalysis(Analysis):
+    if_val_1:int = 15
+    if_val_2:int = 30
+    range_year:int = YEAR_RANGE
     get_where_clauses: Callable[["Table"], list["Where"]] = None
     min_year : str = ""
     max_year : str = ""
@@ -89,21 +72,14 @@ class PresidentWOSAnalysis(Analysis):
         self._first_or_reprint_author_cited_count = ResettableLazy(self._fetch_first_or_reprint_author_cited_count)
         self._growth_rate = ResettableLazy(self._fetch_growth_rate)
         self._range_year_growth_rate= ResettableLazy(self._fetch_range_year_growth_rate)
-        # self._growth_rate_range_year = ResettableLazy(self._fetch_growth_rate_range_year) # 暫時沒用到
-        # self._growth_rate_without_year = ResettableLazy(self._fetch_growth_rate_without_year) # 是因為年份格式不統一所以才有這個function，現在用不到
+
         self._avg_cited = ResettableLazy(self._fetch_avg_cited)
         self._scie_data_info = ResettableLazy(self._fetch_scie_data_info)
         self._ssci_data_info = ResettableLazy(self._fetch_ssci_data_info)
         self._ahci_data_info = ResettableLazy(self._fetch_ahci_data_info)
 
-        # self._scie_paper_count = ResettableLazy(self._fetch_scie_paper_count)
-        # self._ssci_paper_count = ResettableLazy(self._fetch_ssci_paper_count)
-        # self._ahci_paper_count = ResettableLazy(self._fetch_ahci_paper_count)
-        # self._scie_growth_rate = ResettableLazy(self._fetch_scie_growth_rate)
-        # self._ssci_growth_rate = ResettableLazy(self._fetch_ssci_growth_rate)
-        # self._ahci_growth_rate = ResettableLazy(self._fetch_ahci_growth_rate)
-        self._if15_paper_count = ResettableLazy(self._fetch_if15_paper_count)
-        self._if30_paper_count = ResettableLazy(self._fetch_if30_paper_count)
+        self._if_1_paper_count = ResettableLazy(self._fetch_if_1_paper_count)
+        self._if_2_paper_count = ResettableLazy(self._fetch_if_2_paper_count)
         
         self._first_or_reprint_subject_cache = None   # (subject, bind_cols)
 
@@ -146,11 +122,11 @@ class PresidentWOSAnalysis(Analysis):
     def ahci_paper_count(self) -> ORG_MAP:
         return self._ahci_data_info.value.get(PAPER_COUNT, {})
     @property
-    def if15_paper_count(self) -> ORG_MAP:
-        return self._if15_paper_count.value
+    def if_1_paper_count(self) -> ORG_MAP:
+        return self._if_1_paper_count.value
     @property
-    def if30_paper_count(self) -> ORG_MAP:
-        return self._if30_paper_count.value
+    def if_2_paper_count(self) -> ORG_MAP:
+        return self._if_2_paper_count.value
     @property
     def growth_rate(self) -> ORG_MAP:
         return self._growth_rate.value
@@ -330,11 +306,11 @@ class PresidentWOSAnalysis(Analysis):
         res = self.get_orgmap_from_df(df_if_paper_count)
         return res
     
-    def _fetch_if15_paper_count(self):
-        return self._get_if_paper_count(0.15)
+    def _fetch_if_1_paper_count(self):
+        return self._get_if_paper_count(self.if_val_1/100)
 
-    def _fetch_if30_paper_count(self):
-        return self._get_if_paper_count(0.30)
+    def _fetch_if_2_paper_count(self):
+        return self._get_if_paper_count(self.if_val_2/100)
 
     def _fetch_range_year_growth_rate(self):
         select_years = self.selected_range_years #Util.get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
@@ -470,7 +446,7 @@ class PresidentWOSAnalysis(Analysis):
             TemplateType.S4: lambda: (S4(sheet_name,idx,tab_name), self.get_s4_rows()), # WOS 論文成長率
             TemplateType.S5: lambda: (S5(sheet_name,idx,tab_name), self.get_s5_rows()), # WOS 平均被引次數統計
             TemplateType.S6: lambda: (S6(sheet_name,idx,tab_name), self.get_s6_rows()), # WOS SCIE、SSCI、A&HCI 各自的論文數及論文成長率
-            TemplateType.S7: lambda: (S7(sheet_name,idx,tab_name), self.get_s7_rows()), # WOS 論文數統計、高影響期刊係數IF值
+            TemplateType.S7: lambda: (S7(sheet_name,idx,tab_name,self.if_val_1,self.if_val_2), self.get_s7_rows()), # WOS 論文數統計、高影響期刊係數IF值
             #TemplateType.S8: lambda: (S8(sheet_name,idx,tab_name), self.get_s8_rows()), #暫不製作
             TemplateType.S9: lambda: (S9(sheet_name,idx,tab_name), self.get_s9_rows()), # WOS 三年論文成長率
         }
@@ -671,8 +647,8 @@ class PresidentWOSAnalysis(Analysis):
         def compute(org:str, temp_rows:list, merge_key:dict = None):
                     
             cnt_list = []
-            if15_cnt_list = []
-            if30_cnt_list = []
+            if_1_cnt_list = []
+            if_2_cnt_list = []
             for y in self.years:
                 if merge_key:
                     org_key = merge_key[y]
@@ -680,20 +656,20 @@ class PresidentWOSAnalysis(Analysis):
                     org_key = org
 
                 cnt = self.paper_count.get(org_key,{}).get(y, 0)
-                if15_cnt = self.if15_paper_count.get(org_key,{}).get(y, 0)
-                if30_cnt = self.if30_paper_count.get(org_key,{}).get(y, 0)
+                if_1_cnt = self.if_1_paper_count.get(org_key,{}).get(y, 0)
+                if_2_cnt = self.if_2_paper_count.get(org_key,{}).get(y, 0)
 
                 cnt_list.append(str(cnt))
                 if cnt == 0 :
-                    if15_cnt_list.extend(["0","0"])
-                    if30_cnt_list.extend(["0","0"])
+                    if_1_cnt_list.extend(["0","0"])
+                    if_2_cnt_list.extend(["0","0"])
                 else:
-                    if15_cnt_list.extend([str(if15_cnt), str(self.get_ratio(if15_cnt, cnt))])
-                    if30_cnt_list.extend([str(if30_cnt), str(self.get_ratio(if30_cnt, cnt))])
+                    if_1_cnt_list.extend([str(if_1_cnt), str(self.get_ratio(if_1_cnt, cnt))])
+                    if_2_cnt_list.extend([str(if_2_cnt), str(self.get_ratio(if_2_cnt, cnt))])
 
             temp_rows.append(cnt_list)
-            temp_rows.append(if15_cnt_list)
-            temp_rows.append(if30_cnt_list)
+            temp_rows.append(if_1_cnt_list)
+            temp_rows.append(if_2_cnt_list)
             
 
         return self._build_rows(compute)

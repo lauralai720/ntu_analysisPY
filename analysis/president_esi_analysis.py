@@ -11,7 +11,6 @@ from collections import defaultdict
 from dal_provider import get_dal
 from config import DEBUG
 import common.db_schema as db_schema
-import common.util as Util
 import analysis.data_analysis as DataAnalysis
 from components import *
 from components.template_esi import *
@@ -79,67 +78,6 @@ class ResettableLazy(IResettable, Generic[T]):
 def try_get(map:ORG_FIELD_VERSION_VALUE, org_serial: str, ver:str, field:str = "1"):
     return map.get(org_serial, {}).get(field,{}).get(ver,"")
 
-
-class PresidentESIReport:
-    TemplateTypeName: dict[str, TemplateType] = {
-        "E1. 近十一年學術論文總數及排名": TemplateType.E1,
-        "E2. 近十一年學術論文被引次數及排名": TemplateType.E2,
-        "E3. 近十一年學術論文平均被引次數及排名": TemplateType.E3,
-        "E4. 近十一年高被引論文數及排名": TemplateType.E4,
-        "E5. 近十一年熱門論文數": TemplateType.E5,
-        "E6. 近十一年分領域論文數及世界排名、亞太排名": TemplateType.E6,
-        "E7. 近十一年分領域被引次數及世界排名、亞太排名": TemplateType.E7,
-        "F1. 進入ESI排名之領域及其學術論文數": TemplateType.F1,
-        "F2. 進入ESI排名之領域及其學術論文數(亞太排名)": TemplateType.F2,
-        "F3. 進入ESI排名之領域及其論文被引次數與平均被引次數": TemplateType.F3,
-        "F4. 進入ESI排名之領域及其論文被引次數與平均被引次數(亞太排名)": TemplateType.F4,
-        "F5. 各領域論文數前三名機構": TemplateType.F5,
-        "F6. 各領域被引次數前三名機構": TemplateType.F6,
-    }
-    TemplateTypeShortName: dict[str, TemplateType] = { 
-        "E1": TemplateType.E1 ,
-        "E2": TemplateType.E2 ,
-        "E3": TemplateType.E3 ,
-        "E4": TemplateType.E4 ,
-        "E5": TemplateType.E5 ,
-        "E6": TemplateType.E6 ,
-        "E7": TemplateType.E7 ,
-        "F1": TemplateType.F1 ,
-        "F2": TemplateType.F2 ,
-        "F3": TemplateType.F3 ,
-        "F4": TemplateType.F4 ,
-        "F5": TemplateType.F5 ,
-        "F6": TemplateType.F6 
-    }
-    project_name: str = ""
-    shown_time: str = ""
-    items : list["PresidentESIReportItem"] = field(default_factory=list)
-    output_path : str = ""
-
-    def set_items(self, adds):
-        self.items = adds
-
-
-@dataclass
-class PresidentESIReportItem:
-    Name: str
-    Type: TemplateType
-    Index: int = 0
-    numCHArr = ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
-
-    def __str__(self) -> str:
-        return f"{self.Name} | {self.Type.value}"
-
-    def to_sheet_name(self, esi_report : PresidentESIReport) -> str:
-        result = self.Name.replace("[專案名]", esi_report.project_name)
-        result = result.replace("[表N]", f"表{self.get_num_ch(self.Index)}、")
-        result = result.replace("[時間]", esi_report.shown_time)
-        return result
-    
-    def get_num_ch(self,i) -> str:
-        if (i <=0 or i >= 100):
-            raise PRISError(f"表單Index數值不正確，{i}，正確範圍1~99")
-        return Util.get_num_ch(i)
 
 @dataclass
 class Analysis:
@@ -588,7 +526,7 @@ class PresidentESIAnalysis(Analysis):
 
         total = len(report.items) # 進度條用
         for idx, ritem in enumerate(report.items):
-            tmpl, rows = self.generate_report(ritem, ritem.to_sheet_name(report))
+            tmpl, rows = self.generate_report(ritem, ritem.to_sheet_header_name(report))
             re_export.add_item(tmpl, rows)
 
             if DEBUG:
@@ -600,22 +538,6 @@ class PresidentESIAnalysis(Analysis):
         print()  # 4. 整個迴圈結束後換行        
 
         return re_export
-
-    ## 匯出
-    def export(self, report : PresidentESIReport, re_export: ReportExporter) -> str:
-        print("準備匯出檔案....")
-        # 匯出
-        now = datetime.now().strftime("%y-%m-%d %H%M%S")
-        filename = f"ESI校長報表_{now}"
-        output_path = f"{report.output_path}{filename}.xlsx"
-
-        if output_path:
-            print(f"你選擇的資料夾:{output_path}")
-        else:
-            raise PRISError("沒有選擇資料夾")
-
-        re_export.export(output_path)
-        return output_path
 
     # 產出報表的數據
     def generate_report(self, item : PresidentESIReportItem, sheet_name : str) -> tuple[Template, list[list[str]]] :

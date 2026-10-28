@@ -13,6 +13,10 @@ class DBSchema:
     CountryColumnName = None
     CountryCodeColumnName = None
     ContinentColumnName = None
+    ReportTemplateTableName = "AC_Manager.dbo.Report_Type"
+    ReportTemplateTypeColumn = "Type"
+    ReportAnalysisTypeColumn = "AnalysisType"
+    ReportTemplateNameColumn = "ReportName"
 
 class WOSSchema(DBSchema):
     DBName = ""
@@ -193,6 +197,5 @@ class ESISchema(DBSchema):
 
     ESIInstitutionInfo : ESIInstitutionSubjectInfo = None
     ESIFieldInfo : ESIFieldSubjectInfo = None
-
 
 schema : Optional[ESISchema | WOSSchema] = None

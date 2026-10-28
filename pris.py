@@ -19,84 +19,122 @@ from database import SQLExecute, DB
 dal = get_dal()   # [整理] 原本 run_president_esi_report / insert_integrate_data 用到 dal,卻沒有在本檔宣告(靠 import * 連帶帶入)
 
 
-regReportTableName = "AC_Manager.dbo.RegReportTest" if DEBUG else "AC_Manager.dbo.RegReport"
-regReportFieldTableName = "AC_Manager.dbo.RegReport_FieldTest" if DEBUG else "AC_Manager.dbo.RegReport_Field"
-regReportOrgTableName = "AC_Manager.dbo.RegReport_OrgTest" if DEBUG else "AC_Manager.dbo.RegReport_Org"
-regReportReportTableName = "AC_Manager.dbo.RegReport_tableTest" if DEBUG else "AC_Manager.dbo.RegReport_table" 
+# regReportTableName = "AC_Manager.dbo.RegReportTest" if DEBUG else "AC_Manager.dbo.RegReport"
+# regReportFieldTableName = "AC_Manager.dbo.RegReport_FieldTest" if DEBUG else "AC_Manager.dbo.RegReport_Field"
+# regReportOrgTableName = "AC_Manager.dbo.RegReport_OrgTest" if DEBUG else "AC_Manager.dbo.RegReport_Org"
+# regReportReportTableName = "AC_Manager.dbo.RegReport_tableTest" if DEBUG else "AC_Manager.dbo.RegReport_table" 
 
-## ESI - load 機構
-## 004跟005併校，變091 - 20260827
-def load_orgs(rid) -> tuple[bool, list[str] | None]:
-    dal = get_dal()
-    strCmd = f"SELECT DISTINCT OrgSerial FROM {regReportOrgTableName} WHERE RID = '{rid}' ORDER BY OrgSerial"
-    query_res = dal.query_2d_raw(strCmd)
-    except_orgs = ["TWU000004", "TWU000005"]
-    replace_org = "TWU000091"
-    res = [r[0] for r in query_res if r[0] != ""]
-    for r in query_res:
-        if r[0] in except_orgs:
-            res.remove(r[0])
-            if replace_org not in res:
-                res.append(replace_org)
+# ## ESI - load 機構
+# ## 004跟005併校，變091 - 20260827
+# def load_orgs(rid) -> tuple[bool, list[str] | None]:
+#     dal = get_dal()
+#     strCmd = f"SELECT DISTINCT OrgSerial FROM {regReportOrgTableName} WHERE RID = '{rid}' ORDER BY OrgSerial"
+#     query_res = dal.query_2d_raw(strCmd)
+#     except_orgs = ["TWU000004", "TWU000005"]
+#     replace_org = "TWU000091"
+#     res = [r[0] for r in query_res if r[0] != ""]
+#     for r in query_res:
+#         if r[0] in except_orgs:
+#             res.remove(r[0])
+#             if replace_org not in res:
+#                 res.append(replace_org)
                 
-    return True, res
+#     return True, res
 
-## ESI - load 領域
-def load_fields(rid) -> tuple[bool, list[str] | None]:
-    dal = get_dal()
-    strCmd = f"SELECT DISTINCT FID FROM {regReportFieldTableName} WHERE RID = '{rid}' ORDER BY FID"
-    res = dal.query_2d_raw(strCmd)
+# ## ESI - load 領域
+# def load_fields(rid) -> tuple[bool, list[str] | None]:
+#     dal = get_dal()
+#     strCmd = f"SELECT DISTINCT FID FROM {regReportFieldTableName} WHERE RID = '{rid}' ORDER BY FID"
+#     res = dal.query_2d_raw(strCmd)
     
-    return True,[str(r[0]) for r in res]
+#     return True,[str(r[0]) for r in res]
     
-## load 報表及類型
-def load_reports(rid) -> tuple[bool, PresidentESIReport | None]:
-    import re
+# ## load 報表及類型
+# def load_reports(rid) -> tuple[bool, PresidentESIReport | None]:
+#     import re
 
-    dal = get_dal()
-    print(f"start loadReport : {rid}")
-    strCmd = f"SELECT DISTINCT table_setting FROM {regReportReportTableName} WHERE RID = '{rid}'"
-    report_rows = dal.query_2d_raw(strCmd)
+#     dal = get_dal()
+#     print(f"start loadReport : {rid}")
+#     strCmd = f"SELECT DISTINCT table_setting FROM {regReportReportTableName} WHERE RID = '{rid}'"
+#     report_rows = dal.query_2d_raw(strCmd)
 
-    report = PresidentESIReport()
-    report_items : list[tuple[int, PresidentESIReportItem]] = []
-    if not report_rows:
-        print("no REPORT")
-    else:
-        if len(report_rows) <= 0:
-            print("empty list")
-            return True, report
-        else:
-            for row in report_rows:
-                pattern = re.compile(r"([0-9]+)\. (.*)\| ([EF][0-9]+)$")
-                match = pattern.match(row[0])
+#     report = PresidentESIReport()
+#     report_items : list[tuple[int, PresidentESIReportItem]] = []
+#     if not report_rows:
+#         print("no REPORT")
+#     else:
+#         if len(report_rows) <= 0:
+#             print("empty list")
+#             return True, report
+#         else:
+#             for row in report_rows:
+#                 pattern = re.compile(r"([0-9]+)\. (.*)\| ([EF][0-9]+)$")
+#                 match = pattern.match(row[0])
                 
-                if match:
-                    order = int(match.group(1).strip())
-                    name = match.group(2).strip()
-                    template_type_str = match.group(3).strip()
-                    template_type = PresidentESIReport.TemplateTypeShortName.get(template_type_str)
-                    if template_type is None:
-                        rprint(f"[red]RegReport_table.RID 為 {rid} 的設定為無法辨識的表單類型 {template_type_str}[/red]")
-                        return False, None
+#                 if match:
+#                     order = int(match.group(1).strip())
+#                     name = match.group(2).strip()
+#                     template_type_str = match.group(3).strip()
+#                     template_type = PresidentESIReport.TemplateTypeShortName.get(template_type_str)
+#                     if template_type is None:
+#                         rprint(f"[red]RegReport_table.RID 為 {rid} 的設定為無法辨識的表單類型 {template_type_str}[/red]")
+#                         return False, None
 
-                    report_item = PresidentESIReportItem(name, template_type)
-                    report_items.append((order,report_item))
+#                     report_item = PresidentESIReportItem(name, template_type)
+#                     report_items.append((order,report_item))
                     
-                else:
-                    rprint(f"[red]RegReport_table.RID 為 {rid} 的設定 \"{row[0]}\" 無法辨識, 請確認正確性[/red]")
-                    return False, None
+#                 else:
+#                     rprint(f"[red]RegReport_table.RID 為 {rid} 的設定 \"{row[0]}\" 無法辨識, 請確認正確性[/red]")
+#                     return False, None
 
             
-            report.items = [item[1] for item in sorted(report_items, key=lambda x: x[0])]
+#             report.items = [item[1] for item in sorted(report_items, key=lambda x: x[0])]
             
-            ## 針對Index做變化，原本的邏輯是在getItem才寫上去
-            for idx, x in enumerate(report.items):
-                x.Index = idx+1
+#             ## 針對Index做變化，原本的邏輯是在getItem才寫上去
+#             for idx, x in enumerate(report.items):
+#                 x.Index = idx+1
     
-    return True, report
+#     return True, report
+
+# ## ESI - load 所需資料(機構、領域、模組內的報表列表)
+# def load(rid) -> tuple[list[str], list[str], PresidentESIReport]:
+#     #load sub
+#     load_org_res, org_rows = load_orgs(rid)
+
+#     load_field_res, field_rows = load_fields(rid)
+#     #load report
+#     load_report_res, pesi_report = load_reports(rid)
+    
+#     if load_report_res and load_org_res and load_field_res:
+#         rprint(f"[green]Load report success![/green]")
+#     else:
+#         raise PRISError("report、機構、領域load時，無資料或發生錯誤")
+
+#     return org_rows, field_rows, pesi_report
 
 ## code at Utils.GetSubjects()
+
+_selected_template_data : dict[int, dict] = None
+
+def get_selected_templates(template_types : list[int])-> dict[int, dict]:
+    global _selected_template_data
+    if _selected_template_data is not None:
+        return _selected_template_data
+
+    dal = get_dal()
+    type_list_str = ",".join([str(x) for x in template_types])
+    strCmd = f"SELECT DISTINCT {db_schema.schema.ReportTemplateTypeColumn}, {db_schema.schema.ReportAnalysisTypeColumn}, {db_schema.schema.ReportTemplateNameColumn} FROM {db_schema.schema.ReportTemplateTableName} WHERE Type IN ({type_list_str})"
+    report_df = dal.query(strCmd)
+    if report_df.empty:
+        return {}
+
+    dict_val_cols = [db_schema.schema.ReportAnalysisTypeColumn, db_schema.schema.ReportTemplateNameColumn]
+    report_dict = report_df.set_index(db_schema.schema.ReportTemplateTypeColumn)[dict_val_cols].to_dict(orient='index')
+    _selected_template_data = report_dict
+
+    return _selected_template_data
+
+
 def get_subjects( subj1_selected: list[str],subj2_selected: list[str], year_selector: YearSelector, subj1_obj:GetSubject, subj2_obj:GetSubject) -> Subjects:
     subj1, subj1_bind_col,select_val1,subj1_header,subj1_type_name  = get_subj1_subject(subj1_selected, subj1_obj)
     subj2, subj2_bind_col,select_val2,subj2_header,subj2_type_name  = get_subj2_subject(subj2_selected, subj2_obj)
@@ -149,26 +187,49 @@ def get_year_subject(year_selector : YearSelector) -> tuple["Subject", dict[str,
     subj, bind_col, year_str = year_selector.get_subject()
     return subj, bind_col, year_str
 
-## ESI - load 所需資料(機構、領域、模組內的報表列表)
-def load(rid) -> tuple[list[str], list[str], PresidentESIReport]:
-    #load sub
-    load_org_res, org_rows = load_orgs(rid)
 
-    load_field_res, field_rows = load_fields(rid)
-    #load report
-    load_report_res, pesi_report = load_reports(rid)
-    
-    if load_report_res and load_org_res and load_field_res:
-        rprint(f"[green]Load report success![/green]")
+def check_esi_year_format(year_list:list[str])-> bool :
+    import re
+    if len(year_list) < 2 :
+        return False
+    rgx_esi_version = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if bool(rgx_esi_version.match(year_list[0])) == False or bool(rgx_esi_version.match(year_list[1])) == False:
+        return False
+    return True
+
+def create_esi_report(template_types:list[int]):
+
+    report_dict = get_selected_templates(template_types)
+    report = PresidentESIReport()
+    if len(report_dict) <= 0:
+        print("empty list")
+        return report
     else:
-        raise PRISError("report、機構、領域load時，無資料或發生錯誤")
+        order = 1
+        for t_type in template_types:
+            report_info = report_dict.get(t_type)
+            if report_info:
+                analysis_type = report_info.get("AnalysisType", 0)
+                name = report_info.get("ReportName", "")
+                if not name or AnalysisItemType(analysis_type) != AnalysisItemType.PaperPresidentReportESI:
+                    rprint(f"[red]{t_type}-{analysis_type}的設定為無法辨識的表單類型，請查看AC_Manager.Report_Type[/red]")
+                    continue
 
-    return org_rows, field_rows, pesi_report
-
+                report_item = PresidentESIReportItem(name, TemplateType(t_type))
+                report_item.Index = order
+                report.items.append(report_item)
+                order += 1
+    
+    return report
 
 # 跑PRIS 分析項目為 校長報表(ESI)
-def run_president_esi_report(model_id:int, main_version: str, compare_version: str, output_path: str = "./output/") -> str:
+#def run_president_esi_report(model_id:int, main_version: str, compare_version: str, output_path: str = "./output/") -> str:
+def run_president_esi_report(file_name:str, template_types : list[int], org_ids: list[str], field_ids:list[int], year_list:list[str], output_path: str = "./output/") -> str:
 
+    if not check_esi_year_format(year_list) :
+        raise PRISError(f"ESI - 年份數量或不正確，{year_list}")
+    main_version = year_list[0]
+    compare_version = year_list[1]
     db_schema.schema = db_schema.ESISchema()
     # 互動式選擇年份區間(report_year.py 內部一樣是透過 get_dal() 拿同一份 DataAccessLayer)
     year_selector = ESIYearSelector()
@@ -178,35 +239,17 @@ def run_president_esi_report(model_id:int, main_version: str, compare_version: s
         #rprint("[red]沒有選擇完整的年份區間,程式結束[/red]")
         raise PRISError(f"沒有選擇完整的年份區間")
 
-    ## 載入模組
-    strCmd = f"SELECT RID, R_Name FROM {regReportTableName}"
-    model_rows = dal.query_2d_raw(strCmd)
 
-    selected_row = next((model for model in model_rows if int(model[0]) == model_id), None)
-    if selected_row is None:
-        raise PRISError(f"沒有存在的模組，receive model{model_id}")    
-    
-    project_name = selected_row[1].strip()
-
-    rprint(f"[green]你選的是:{selected_row[0]} - {project_name}[/green]")
-
-    ## 載入模組及領域、機構等資料
-    orgs, fields, esi_report = load(selected_row[0])
+    # ## 載入模組及領域、機構等資料
+    str_field_ids = [str(f) for f in field_ids]
+    esi_report = create_esi_report(template_types)
+    project_name = file_name.format(Util.get_num_ch(len(org_ids)))
 
     ## 顯示Query後的資料
     print(f"{project_name} 中的 比較年份 : ")
     print(f"主要年份 - {year_selector.selected_main.get_verion_str()}({year_selector.selected_main.to_str(ESIYearStyle.Style2)})")
     print(f"比較年份 - {year_selector.selected_comp.get_verion_str()}({year_selector.selected_comp.to_str(ESIYearStyle.Style2)})")
 
-    if orgs is not None:
-        print(f"{project_name} 中的 機構列表 : ")
-        orgs_name = "、".join(x for x in orgs)
-        print(f"{orgs_name}")
-
-    if fields is not None:
-        print(f"{project_name} 中的 領域列表 : ")
-        fields_name = "、".join(str(x) for x in fields)
-        print(f"{fields_name}")
 
     if esi_report is not None:
         esi_report.output_path = output_path
@@ -231,7 +274,7 @@ def run_president_esi_report(model_id:int, main_version: str, compare_version: s
         db_schema.schema.ESIFieldInfo = subj2_subjinfo
 
         ## 生成一個可以用的subjects
-        all_subjs = get_subjects(subj1_selected=orgs, subj2_selected=fields, year_selector=year_selector, subj1_obj=subj1_subjinfo, subj2_obj=subj2_subjinfo)
+        all_subjs = get_subjects(subj1_selected=org_ids, subj2_selected=str_field_ids, year_selector=year_selector, subj1_obj=subj1_subjinfo, subj2_obj=subj2_subjinfo)
 
         prESI_anaylsis.subjects = all_subjs
         prESI_anaylsis.get_where_clauses = lambda table:None # 因為現階段都回傳null，所以暫時給一個方法可以被執行
@@ -243,7 +286,9 @@ def run_president_esi_report(model_id:int, main_version: str, compare_version: s
             raise PRISError("計算完的資料是None")
 
         # 匯出報表
-        export_file_path = prESI_anaylsis.export(report=esi_report, re_export=re_export)
+        export_file_path = esi_report.output_file
+        re_export.export(export_file_path)
+        #export_file_path = prESI_anaylsis.export(report=esi_report, re_export=re_export)
 
         return export_file_path
 
@@ -265,7 +310,7 @@ def check_wos_integrate_exist() -> bool:
     return True
 
 
-def create_wos_report(file_name:str, template_types : list[int], target_name:str, year_format:str, source_name:str, mix_year:int, max_year:int) -> PresidentWOSReport:
+def create_wos_report(file_name:str, template_types : list[int], target_name:str, year_format:str, source_name:str, mix_year:int, max_year:int, wos_analysis: PresidentWOSAnalysis) -> PresidentWOSReport:
     report = PresidentWOSReport()
     report.project_name = file_name
     year_range_replace = year_format.replace("x", str(mix_year)).replace("y", str(max_year))
@@ -279,6 +324,15 @@ def create_wos_report(file_name:str, template_types : list[int], target_name:str
             tab = TemplateNameMapping[template_type]
             sheet= TemplateNameMapping[template_type]
 
+        if template_type == TemplateType.S7:
+            tab = tab.format(wos_analysis.if_val_1, wos_analysis.if_val_2)
+            sheet = sheet.format(wos_analysis.if_val_1, wos_analysis.if_val_2)
+
+        if template_type == TemplateType.S9:
+            year_str = Util.get_num_ch(wos_analysis.range_year)
+            tab = tab.format(year_str)
+            sheet = sheet.format(year_str)
+
         whole_sheet_name = f"{target_name}{year_range_replace}{source_name}{sheet}"
 
         report_item = PresidentWOSReportItem(type=template_type, sheet_name=whole_sheet_name, tab_name= tab, index=i)
@@ -289,7 +343,17 @@ def create_wos_report(file_name:str, template_types : list[int], target_name:str
 
 
 ## template_types S1~S8
-def run_president_wos_report(db_name: str, file_name:str, template_types : list[int], org_ids: list[str], year_list:list[str], target:int, year_format:str, source_name:str, output_path: str = "./output/") -> str:
+def run_president_wos_report(
+        db_name: str, 
+        file_name:str, 
+        template_types : list[int], 
+        org_ids: list[str], 
+        year_list:list[str], 
+        target:int, 
+        year_format:str, 
+        source_name:str, 
+        output_path: str = "./output/", 
+        **other) -> str:
     db_schema.schema = db_schema.WOSSchema()
     db_schema.schema.set_DB_name(db_name)
     rprint(f"[green]設定DB名稱 : {db_schema.schema.DBName}[/green]")
@@ -311,8 +375,7 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
         raise PRISError("找不到Sheet標題.")
 
     target_name = TargetSheetHeader[wos_target]
-    if wos_target == WOSTarget.Internal or wos_target == WOSTarget.InternalResearch: 
-        target_name = target_name.format(Util.get_num_ch(len(org_ids)))
+    target_name = target_name.format(Util.get_num_ch(len(org_ids)))
     
     ## 年份
     year_selector = WOSYearSelector()
@@ -324,9 +387,19 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
     if not years:
         raise PRISError("年份列表不得為空")
 
+    # 建立分析用的class
+    wos_analysis = PresidentWOSAnalysis()
+    # 設定部分參數的值(如果沒有就用預設值)
+    jcr_if_1 = other.get("jcr_if_1",0)
+    jcr_if_2 = other.get("jcr_if_2",0)
+    if jcr_if_1 > 0 and jcr_if_1 < 100:
+        wos_analysis.if_val_1 = jcr_if_1
+    if jcr_if_2 > 0 and jcr_if_2 < 100:
+        wos_analysis.if_val_2 = jcr_if_2
+
     ## 報表
-    report = create_wos_report(file_name, template_types, target_name, year_format, source_name, min(years), max(years))
-    report.output_path = output_path
+    wos_report = create_wos_report(file_name, template_types, target_name, year_format, source_name, min(years), max(years), wos_analysis)
+    wos_report.output_path = output_path
 
     subj1_subjinfo = WOSPaperOrgSubjectInfo(selected_values=org_ids)
     db_schema.schema.WOSOrgSubjectInfo = subj1_subjinfo
@@ -335,17 +408,22 @@ def run_president_wos_report(db_name: str, file_name:str, template_types : list[
     ## 生成一個可以用的subjects
     all_subjs = get_subjects(subj1_selected=org_ids, subj2_selected=None, year_selector=year_selector, subj1_obj=subj1_subjinfo, subj2_obj=subj2_subjinfo)
     
-    wos_analysis = PresidentWOSAnalysis()
+    
     wos_analysis.subjects = all_subjs
+    
+
     wos_analysis.get_where_clauses = lambda table:None # 因為現階段都回傳null，所以暫時給一個方法可以被執行
 
-    re_export = wos_analysis.run(report)
+    re_export = wos_analysis.run(wos_report)
 
     if re_export is None:
         raise PRISError("計算完的資料是None")
 
     # 匯出報表
-    export_file_path = wos_analysis.export(report=report, re_export=re_export)
+            
+    export_file_path = wos_report.output_file
+    re_export.export_wos(export_file_path)
+    #export_file_path = wos_analysis.export(report=wos_report, re_export=re_export)
 
     return export_file_path
 

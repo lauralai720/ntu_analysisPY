@@ -2,131 +2,132 @@ import math
 import pandas as pd
 from config import *
 
-class DataTableFormatter:
-    def __init__(self,s1_h:str,s2_h:str,y_h:str,ex_list:list[str] = None):
-        #self.set_data: set[tuple[str, ...]] = set()
-        self.set_data_dict = {} # 因為python的set基本上會打亂，先改用dict存，讓出來的結果跟C#一樣
-        self.table:list[tuple[dict[tuple[str, ...], str], str, str]] = []
-        self.extenion: list[str] = ex_list
-        self.s1_header: str = s1_h
-        self.s2_header: str = s2_h
-        self.year_header: str = y_h
 
-    def add(self, df:pd.DataFrame, default_val:str = "0", name:str | None = None):
+# class DataTableFormatter:
+#     def __init__(self,s1_h:str,s2_h:str,y_h:str,ex_list:list[str] = None):
+#         #self.set_data: set[tuple[str, ...]] = set()
+#         self.set_data_dict = {} # 因為python的set基本上會打亂，先改用dict存，讓出來的結果跟C#一樣
+#         self.table:list[tuple[dict[tuple[str, ...], str], str, str]] = []
+#         self.extenion: list[str] = ex_list
+#         self.s1_header: str = s1_h
+#         self.s2_header: str = s2_h
+#         self.year_header: str = y_h
+
+#     def add(self, df:pd.DataFrame, default_val:str = "0", name:str | None = None):
         
-        last_column_name = df.columns[-1]
+#         last_column_name = df.columns[-1]
 
-        key_list = df.apply(lambda row: self.get_str_array(row, self.s1_header, self.s2_header,self.year_header, self.extenion),axis=1).to_list()
+#         key_list = df.apply(lambda row: self.get_str_array(row, self.s1_header, self.s2_header,self.year_header, self.extenion),axis=1).to_list()
 
-        # 3. 提取最後一欄的所有數值
-        values = df[last_column_name].astype(str)
+#         # 3. 提取最後一欄的所有數值
+#         values = df[last_column_name].astype(str)
 
-        self.set_data_dict.update(dict.fromkeys(key_list))
+#         self.set_data_dict.update(dict.fromkeys(key_list))
 
-        # 5. 用 zip 打包成當前表格的字典
-        current_dict = dict(zip(key_list, values))
-        self.table.append((current_dict, name if name is not None else df.table_name, default_val))
+#         # 5. 用 zip 打包成當前表格的字典
+#         current_dict = dict(zip(key_list, values))
+#         self.table.append((current_dict, name if name is not None else df.table_name, default_val))
 
 
-    def create_data_frame(self, set_data_keys, s1: str, s2: str, s3: str, extension: list[str]) -> pd.DataFrame:
-        # 1. 動態組合出所有的欄位名稱 (Headers)
-        headers = []
-        if s1 is not None: headers.append(s1)
-        if s2 is not None: headers.append(s2)
-        if s3 is not None: headers.append(s3)
-        if extension is not None: headers.extend(extension)
+#     def create_data_frame(self, set_data_keys, s1: str, s2: str, s3: str, extension: list[str]) -> pd.DataFrame:
+#         # 1. 動態組合出所有的欄位名稱 (Headers)
+#         headers = []
+#         if s1 is not None: headers.append(s1)
+#         if s2 is not None: headers.append(s2)
+#         if s3 is not None: headers.append(s3)
+#         if extension is not None: headers.extend(extension)
         
-        # 2. 將集合轉成二維 List。
-        # 因為 Python 的 DataFrame 可以直接吃這種結構，完全不需要手動一筆一筆建立 Row
-        matrix_data = [list(item) for item in set_data_keys]
+#         # 2. 將集合轉成二維 List。
+#         # 因為 Python 的 DataFrame 可以直接吃這種結構，完全不需要手動一筆一筆建立 Row
+#         matrix_data = [list(item) for item in set_data_keys]
         
-        # 3. 一行建立 DataFrame
-        df = pd.DataFrame(matrix_data, columns=headers)
-        return df
+#         # 3. 一行建立 DataFrame
+#         df = pd.DataFrame(matrix_data, columns=headers)
+#         return df
 
-    def convert_dict_to_data_frame(
-        self,
-        df: pd.DataFrame, 
-        inner_dict: dict[tuple[str, ...], str], 
-        column_name: str, 
-        s1: str, s2: str, s3: str, 
-        suffix: str, 
-        default_val: str, 
-        extension: list[str]
-    ) -> None:
+#     def convert_dict_to_data_frame(
+#         self,
+#         df: pd.DataFrame, 
+#         inner_dict: dict[tuple[str, ...], str], 
+#         column_name: str, 
+#         s1: str, s2: str, s3: str, 
+#         suffix: str, 
+#         default_val: str, 
+#         extension: list[str]
+#     ) -> None:
         
-        # 1. 決定要拿哪幾個欄位來當作比對的 Key (等同於 C# 的 getStringArray 邏輯)
-        key_columns = []
-        if s1 is not None: key_columns.append(s1)
-        if s2 is not None: key_columns.append(s2)
-        if s3 is not None: key_columns.append(s3)
-        if extension is not None: key_columns.extend(extension)
+#         # 1. 決定要拿哪幾個欄位來當作比對的 Key (等同於 C# 的 getStringArray 邏輯)
+#         key_columns = []
+#         if s1 is not None: key_columns.append(s1)
+#         if s2 is not None: key_columns.append(s2)
+#         if s3 is not None: key_columns.append(s3)
+#         if extension is not None: key_columns.extend(extension)
         
-        # 2. 定義防呆回傳值 (等同於 $"{defaultVal}{suffix}")
-        fallback_val = f"{default_val}{suffix}"
+#         # 2. 定義防呆回傳值 (等同於 $"{defaultVal}{suffix}")
+#         fallback_val = f"{default_val}{suffix}"
         
-        # 3. 核心行：將指定的欄位組合轉成 tuple，並直接去 dict 撈資料
-        #    (axis=1 代表按列處理。tuple(row) 會把那一列選定欄位的值打包成不可變的 tuple，與字典對齊)
-        df[column_name] = df.apply(
-            lambda row: inner_dict.get(
-                self.get_str_array(row, self.s1_header, self.s2_header, self.year_header, self.extenion),
-                fallback_val
-            ),
-            axis=1
-        )
-    ## 原C# function 是回傳 DataTable
-    def get_data_frame(self, suffix: str = None) -> pd.DataFrame:
-        # 1. 呼叫上面的優化函式，建立初始的 DataFrame
-        df = self.create_data_frame(self.set_data_dict.keys(), self.s1_header, self.s2_header, self.year_header, self.extenion)
+#         # 3. 核心行：將指定的欄位組合轉成 tuple，並直接去 dict 撈資料
+#         #    (axis=1 代表按列處理。tuple(row) 會把那一列選定欄位的值打包成不可變的 tuple，與字典對齊)
+#         df[column_name] = df.apply(
+#             lambda row: inner_dict.get(
+#                 self.get_str_array(row, self.s1_header, self.s2_header, self.year_header, self.extenion),
+#                 fallback_val
+#             ),
+#             axis=1
+#         )
+#     ## 原C# function 是回傳 DataTable
+#     def get_data_frame(self, suffix: str = None) -> pd.DataFrame:
+#         # 1. 呼叫上面的優化函式，建立初始的 DataFrame
+#         df = self.create_data_frame(self.set_data_dict.keys(), self.s1_header, self.s2_header, self.year_header, self.extenion)
         
-        # 2. 處理 suffix 的預設值 (等同於 suffix = suffix ?? "")
-        if suffix is None:
-            suffix = ""
+#         # 2. 處理 suffix 的預設值 (等同於 suffix = suffix ?? "")
+#         if suffix is None:
+#             suffix = ""
             
-        # 3. 遍歷那串複雜的 tables 結構
-        #    item.Item1 -> inner_dict
-        #    item.Item2 -> col_name
-        #    item.Item3 -> status_or_whatever (對應你 C# 傳入 convertDictToDataTable 的倒數第二個參數)
-        for inner_dict, col_name, extra_param in self.table:
-            # 呼叫你原本對應的 convertDictToDataTable 邏輯
-            # 注意：在 Python 中，物件是以「傳址」傳遞，所以功能會在 convert 函式內部直接修改 df
-            self.convert_dict_to_data_frame(
-                df, inner_dict, col_name, 
-                self.s1_header, self.s2_header, self.year_header, 
-                suffix, extra_param, self.extenion
-            )
+#         # 3. 遍歷那串複雜的 tables 結構
+#         #    item.Item1 -> inner_dict
+#         #    item.Item2 -> col_name
+#         #    item.Item3 -> status_or_whatever (對應你 C# 傳入 convertDictToDataTable 的倒數第二個參數)
+#         for inner_dict, col_name, extra_param in self.table:
+#             # 呼叫你原本對應的 convertDictToDataTable 邏輯
+#             # 注意：在 Python 中，物件是以「傳址」傳遞，所以功能會在 convert 函式內部直接修改 df
+#             self.convert_dict_to_data_frame(
+#                 df, inner_dict, col_name, 
+#                 self.s1_header, self.s2_header, self.year_header, 
+#                 suffix, extra_param, self.extenion
+#             )
             
-        return df
+#         return df
     
-    # 照原本function命名
-    def get_str_array(self, row:pd.Series, subj1, subj2, subj3, extension: list[str]):
-        i = 0
-        s1 :str = None
-        s2 :str = None
-        s3 :str = None
+#     # 照原本function命名
+#     def get_str_array(self, row:pd.Series, subj1, subj2, subj3, extension: list[str]):
+#         i = 0
+#         s1 :str = None
+#         s2 :str = None
+#         s3 :str = None
 
-        if subj1 is not None:
-            s1 = str(row.iloc[i])
-            i += 1
-        if subj2 is not None:
-            s2 = str(row.iloc[i])
-            i += 1
-        if subj3 is not None:
-            s3 = str(row.iloc[i])
-            i += 1
+#         if subj1 is not None:
+#             s1 = str(row.iloc[i])
+#             i += 1
+#         if subj2 is not None:
+#             s2 = str(row.iloc[i])
+#             i += 1
+#         if subj3 is not None:
+#             s3 = str(row.iloc[i])
+#             i += 1
 
-        ex :list[str] = None
-        if extension is not None:
-            ex =[]
-            for j in range(len(extension)):
-                ex.append(str(row.iloc[i+j]))
+#         ex :list[str] = None
+#         if extension is not None:
+#             ex =[]
+#             for j in range(len(extension)):
+#                 ex.append(str(row.iloc[i+j]))
 
-        tmp = [s1, s2, s3]
+#         tmp = [s1, s2, s3]
 
-        if ex is not None:
-            tmp += ex
+#         if ex is not None:
+#             tmp += ex
 
-        return tuple(tmp)
+#         return tuple(tmp)
 
 
 ## 因為如果值是數字，用string方式寫入excel欄位，excel會跳警告(是數字還是文字)
@@ -157,7 +158,13 @@ def convert_type(text_value):
         # 轉換失敗代表是純文字 (例如 "text")，直接回傳原字串
         return text_value
 
-def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int = 0, year_range:int = YEAR_RANGE, year_repeat:int = YEAR_REPEAT) -> list[str]:
+def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int = 0, year_range:int = YEAR_RANGE, format:int = 1) -> list[str]:
+    '''
+    可以輸入年份列表([2000,2001,2002...])或最小年跟最大年
+    year_range為年份區間，例如year_range=3，區間為 2000-2002
+    format = 1 逐年，2000-2002、2001-2003...
+    format = 2 連接上一個結束年，2000-2002、2003-2005...
+    '''
     if year_list:
         int_years = [int(x) for x in year_list]
         min_y = min(int_years)
@@ -167,16 +174,19 @@ def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int 
     stop_y = max_y
     select_years = []
 
-    while (start_y + year_repeat) <= stop_y:
+    while (start_y + year_range - 1 ) <= stop_y:
         end_y = start_y + year_range - 1
         select_years.append(f"{start_y}-{end_y}")
-        start_y = start_y+1
+        start_y = start_y+1 if format == 1 else end_y+1
 
     return select_years
 
 
 num_ch_list = ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
 def get_num_ch(i) -> str:
+    '''
+    輸入數字，將數字轉國字數字字串
+    '''
     if (i <=0 or i >= 100):
         return "N"
     ret = ""
@@ -192,6 +202,9 @@ def get_num_ch(i) -> str:
     return ret
 
 def org_serial_code_type(org_serial:str):
+    '''
+    輸入OrgSerial，按照級別，把OrgSerial用成集合狀態，主要用在sql like 語法
+    '''
     if org_serial[9:11] == "00":
         return org_serial[:9] + "%"
     if org_serial[11:13] == "00":
@@ -201,6 +214,12 @@ def org_serial_code_type(org_serial:str):
     return org_serial
 
 def join_dataframes(df1, df2):
+    '''
+    將兩個DataFrame做merge
+    兩個DataFrame的資料結構必須一樣，只有最後一個colum的值是不一樣的
+    key_col_num代表前面有幾個欄位是要當key判斷
+    如果key_col_num=2代表前兩個欄位的值必須一樣才能合併在同一列
+    '''
     # 取得共同欄位
     common_cols = list(set(df1.columns) & set(df2.columns))
     # outer join
@@ -208,3 +227,28 @@ def join_dataframes(df1, df2):
     # 如果要移除重複欄位，可進一步處理
     # result = result.loc[:,~result.columns.str.endswith('_dup')]
     return result
+
+
+def join_diff_dataframes(df1, df2, key_col_num:int)->pd.DataFrame:
+    '''
+    將兩個不同欄位名稱的DataFrame做merge
+    key_col_num需替換成相同欄位名稱的數量
+    如果key_col_num=2 代表 前兩欄的欄位名稱會被替換成M1、M2
+    新的dataframe是替換名稱欄+最後一欄
+    之後丟給join_dataframes做合併
+    '''
+    key_cols = [f'M{i+1}' for i in range(key_col_num)]
+
+    df1_new = df1.iloc[:, list(range(key_col_num)) + [-1]].copy()
+    df2_new = df2.iloc[:, list(range(key_col_num)) + [-1]].copy()
+    # 1. rename column key
+    df1_new.columns = key_cols + ['Column1']
+    df2_new.columns = key_cols + ['Column2']
+
+    # 2. 將兩個df merge
+    df_merged = join_dataframes(df1_new, df2_new)
+
+    return df_merged
+
+def get_per_year_list(from_y:int, to_y:int) -> list[int]:
+    return list(range(from_y, to_y + 1))

@@ -13,7 +13,7 @@ from config import *
 from export.excel_report import *
 
 class TemplateType(Enum):
-    E1 = 0
+    E1 = 1
     E2 = auto()
     E3 = auto()
     E4 = auto()

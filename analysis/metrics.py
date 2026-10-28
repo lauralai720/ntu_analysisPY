@@ -10,7 +10,7 @@ import common.db_schema as db_schema
 from components.subjects import Subjects
 from dal_provider import get_dal
 from components.year_selector import ESIYear
-from common.util import DataTableFormatter
+import common.util as Util
 from . import data_analysis as DataAnalysis
 from database import *
 from exceptions import PRISError
@@ -574,7 +574,6 @@ class ESIMetrics(Metrics):
             ret[version][field].append(RankItem(number=number, rank=rank))
 
         return ret
-        
 
     def get_world_rank_of_selected_version(self, col_name: str, func_str : str = None)->VERSION_FIELD_RANK:
         if func_str == None:
@@ -637,18 +636,14 @@ class ESIMetrics(Metrics):
 
     def div_data_tables(self, df1 : pd.DataFrame, df2: pd.DataFrame, use_percent_age: bool = False)-> pd.DataFrame:
         subj_num = len(df1.columns) - 1
-        dtf :DataTableFormatter = None
-        if subj_num == 1 :
-            dtf = DataTableFormatter("S1", None, None)
-        elif subj_num == 2:
-            dtf = DataTableFormatter("S1", "S2", None)
-        else:
-            dtf = DataTableFormatter("S1", "S2", "Y")
+        if subj_num <= 0:
+            raise PRISError(f"合併欄位數量{subj_num}不合法")
+        if subj_num > 3:
+            subj_num = 3 # 原本的寫法只會替換前1~3個欄位
 
-        dtf.add(df1, name="Column1")     # [整理] 不再對 DataFrame 動態加屬性(pandas 會警告、copy 後會消失)
-        dtf.add(df2, name="Column2")
+        df_merge = Util.join_diff_dataframes(df1,df2,subj_num)
 
-        res = DataAnalysis.a08_cntavg_calculate(dtf.get_data_frame(), 2 + self.DECIMAL_PLACES if use_percent_age else self.DECIMAL_PLACES)
+        res = DataAnalysis.a08_cntavg_calculate(df_merge, 2 + self.DECIMAL_PLACES if use_percent_age else self.DECIMAL_PLACES)
         res = res.drop(columns=["Column1","Column2"])
 
         if use_percent_age:
