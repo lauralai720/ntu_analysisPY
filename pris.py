@@ -262,11 +262,11 @@ def run_president_esi_report(file_name:str, template_types : list[int], org_ids:
 
         """ Run 計算 start from MainView.runAnalysis """
         s_main_ver = str(year_selector.selected_main)
-        s_main_ver_short = year_selector.selected_main.get_verion_str()
+        s_main_ver_key = year_selector.selected_main.get_verion_str()
         s_comp_ver = str(year_selector.selected_comp)
-        s_comp_ver_short = year_selector.selected_comp.get_verion_str()
+        s_comp_ver_key = year_selector.selected_comp.get_verion_str()
 
-        prESI_anaylsis = PresidentESIAnalysis(main_ver=s_main_ver,main_ver_short=s_main_ver_short,comp_ver=s_comp_ver,comp_ver_short=s_comp_ver_short)
+        prESI_anaylsis = PresidentESIAnalysis(main_ver=s_main_ver,main_ver_key=s_main_ver_key,comp_ver=s_comp_ver,comp_ver_key=s_comp_ver_key)
 
         subj1_subjinfo = ESIInstitutionSubjectInfo("Institution", "機構")
         db_schema.schema.ESIInstitutionInfo = subj1_subjinfo
@@ -380,10 +380,10 @@ def run_president_wos_report(
     ## 年份
     year_selector = WOSYearSelector()
     year_selector.year_list = year_list
-    # template 那邊需要年份
-    Template_WOS.set_year_list(year_list)
 
-    years = [int(x) for x in year_list if x]
+    
+
+    years = list(map(int, year_list))
     if not years:
         raise PRISError("年份列表不得為空")
 
@@ -392,10 +392,13 @@ def run_president_wos_report(
     # 設定部分參數的值(如果沒有就用預設值)
     jcr_if_1 = other.get("jcr_if_1",0)
     jcr_if_2 = other.get("jcr_if_2",0)
+    range_year = other.get("range_year",0)
     if jcr_if_1 > 0 and jcr_if_1 < 100:
         wos_analysis.if_val_1 = jcr_if_1
     if jcr_if_2 > 0 and jcr_if_2 < 100:
         wos_analysis.if_val_2 = jcr_if_2
+    if range_year > 0 and range_year < 10:
+        wos_analysis.range_year = range_year
 
     ## 報表
     wos_report = create_wos_report(file_name, template_types, target_name, year_format, source_name, min(years), max(years), wos_analysis)
@@ -408,10 +411,8 @@ def run_president_wos_report(
     ## 生成一個可以用的subjects
     all_subjs = get_subjects(subj1_selected=org_ids, subj2_selected=None, year_selector=year_selector, subj1_obj=subj1_subjinfo, subj2_obj=subj2_subjinfo)
     
-    
     wos_analysis.subjects = all_subjs
     
-
     wos_analysis.get_where_clauses = lambda table:None # 因為現階段都回傳null，所以暫時給一個方法可以被執行
 
     re_export = wos_analysis.run(wos_report)
@@ -420,7 +421,6 @@ def run_president_wos_report(
         raise PRISError("計算完的資料是None")
 
     # 匯出報表
-            
     export_file_path = wos_report.output_file
     re_export.export_wos(export_file_path)
     #export_file_path = wos_analysis.export(report=wos_report, re_export=re_export)

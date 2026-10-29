@@ -15,18 +15,19 @@ from components.template_wos import *
 from export.report_exporter import *
 from analysis.metrics import *
 from exceptions import PRISError
-from analysis.president_esi_analysis import Analysis,ResettableLazy
+from analysis.base_analysis import Analysis,ResettableLazy
 
 dal = get_dal()   # [整理] 原本靠 `import *` 連帶帶進來的 dal,改為明確宣告
 
 class WOSTarget(Enum):
+    '''報表分析對象Tag，對應呼叫參數target'''
     InternalResearch = 1
     NTUCollege = 2
     NTUCollegeAndDepartment = 3
     Internal = 4
     AsiaPacific = 5
 
-## [ TabName(分頁標題), SheetName(表格標題)]，非list的就是一樣的
+
 TemplateNameMapping:dict[TemplateType, str|list[str]] = {
     TemplateType.S1 : ["歷年上半年論文數統計","論文數統計"],
     TemplateType.S2 : "論文數統計",
@@ -37,7 +38,8 @@ TemplateNameMapping:dict[TemplateType, str|list[str]] = {
     TemplateType.S7 : "高影響期刊係數前{0}%及{1}%論文數",
     TemplateType.S8 : "H指數",
     TemplateType.S9 : ["{0}年論文成長率","{0}年論文成長率"],
-}
+} 
+'''[ TabName(分頁標題), SheetName(表格標題)]，非list的就是一樣的'''
 
 TargetSheetHeader = {
     WOSTarget.InternalResearch : "國內{0}所研究型大學",
@@ -46,13 +48,29 @@ TargetSheetHeader = {
     WOSTarget.Internal : "國內{0}所大學",
     WOSTarget.AsiaPacific : "亞太代表性大學"
 }
-
+'''報表分析對象文字，來源自呼叫參數target'''
 
 ORG_MAP: TypeAlias = dict[str, dict[str, float]]
 YEAR_MAP: TypeAlias = dict[str, float]
 
 PAPER_COUNT="paper_count"
 GROWTH_RATE="growth_rate"
+
+
+
+@dataclass(frozen=True)
+class ReportOrgInfo:
+    """
+    「一個機構在報表上要怎麼取資料」的整理結果,S1~S7 與 S9 共用。<br>
+    只記錄「用哪個 DB key」,不存數值;數值一律回頭查 paper_count 等(已延遲載入並共用),
+    所以不論使用者有沒有跑 S1,S9 都能獨立取得。
+    """
+    org: str                       # 未合併的 DB key,例如 TWU000001_1900_2300
+    org_serial: str                # 機構編碼,例如 TWU000001
+    name1: str                     # 機構名稱1 (中文)
+    name2: str                     # 機構名稱2 (英文)
+    key_by_year: dict | None       # {年份: 該年實際使用的 DB key}; 機構沒有合併設定時為 None
+    has_unmerged_row: bool         # 各年使用的 key 不全相同 → (報表上需多一列「*機構編碼」(未合併))
 
 
 @dataclass
@@ -85,20 +103,44 @@ class PresidentWOSAnalysis(Analysis):
 
     @cached_property
     def orgs(self) -> list[str] :
+        '''DB select 用的 機構Key列表，例如 TWU000001_1900_2300'''
         return list(dict.fromkeys(x.replace("''", "'") for x in self.subjects.subject1.subj_vals))
 
     @cached_property
     def latest_jrc_year(self) -> int:
+        '''從DB取得jcr最近的年份'''
         _jcrVersions = self.get_jcr_version_list()
         return max(_jcrVersions)
 
     @cached_property
     def selected_range_years(self)->list[str]:
-        return Util.get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
+        return Util.get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year), year_range=self.range_year)
 
     @cached_property
     def merge_orgs(self) -> dict:
         return self.subjects.WOSselectedVal1.merge_items
+
+    @cached_property
+    def report_org_list(self) -> list[ReportOrgInfo]:
+        """
+        [共用] 把「DB 的 key」整理成「報表上的機構列」。S1~S7 與 S9 原本各自重複這段邏輯
+        快取語意與 partial_merge_periods 相同(同一份年份清單下只算一次)。
+        """
+        org_selected: PaperOrgSelectedValue = self.subjects.WOSselectedVal1
+        partial_merge_periods = self.partial_merge_periods
+        plans = []
+        for org in self.orgs:
+            org_serial, start_year, end_year = self._split_orgs(org)
+            if (int(start_year), int(end_year)) != (1900, 2300):   # 合併期間專用 key,不單獨成列
+                continue
+            org_serial, name1, name2 = org_selected.find_org(org_serial)
+            key_by_year = partial_merge_periods.get(org_serial, {})
+            plans.append(ReportOrgInfo(
+                org=org, org_serial=org_serial, name1=name1, name2=name2,
+                key_by_year=key_by_year or None,
+                has_unmerged_row=bool(key_by_year) and len(set(key_by_year.values())) > 1,
+            ))
+        return plans
     
     @property
     def years(self) -> list[str] :
@@ -142,12 +184,7 @@ class PresidentWOSAnalysis(Analysis):
     @property
     def ahci_growth_rate(self) -> ORG_MAP:
         return self._ahci_data_info.value.get(GROWTH_RATE, {})
-    # @property
-    # def growth_rate_range_year(self) -> ORG_MAP:
-    #     return self._growth_rate_range_year.value
-    # @property
-    # def growth_rate_without_year(self) -> ORG_MAP:
-    #     return self._growth_rate_without_year.value
+
     @property
     def cited_count(self) -> ORG_MAP:
         return self._cited_count.value
@@ -167,6 +204,7 @@ class PresidentWOSAnalysis(Analysis):
     @property
     def paper_growth_metrics(self) -> PaperGrowthRateMetric:
         return PaperGrowthRateMetric(subjects=self.subjects, get_where_clauses=self.get_where_clauses)
+    
     # 文獻計量指標 (評估指標)
     @property
     def paper_indicator_metrics(self) -> PaperIndicator:
@@ -191,18 +229,19 @@ class PresidentWOSAnalysis(Analysis):
         self.subjects.subj1BindCol = new_bind_cols
         try:
             return compute()
-        finally:                                  # 出錯也要還原,避免後面的報表用到錯的 subject
+        finally: 
+            # 出錯也要還原,避免後面的報表用到錯的 subject
             self.subjects.subject1 = ori_subj
             self.subjects.subj1BindCol = ori_bind_col
 
     def _fetch_paper_count(self):
-        df_paper_count = self.paper_metrics.main_paper_count()
+        df_paper_count = self.paper_metrics.main_paper_count
         res = self.get_orgmap_from_df(df_paper_count)
         return res
     
     def _fetch_first_or_reprint_author_paper_count(self):
         return self._with_first_or_reprint_subject(
-            lambda: self.get_orgmap_from_df(self.paper_metrics.main_paper_count()))
+            lambda: self.get_orgmap_from_df(self.paper_metrics.main_paper_count))
 
 
     def _fetch_cited_count(self):
@@ -215,7 +254,8 @@ class PresidentWOSAnalysis(Analysis):
             lambda: self.get_orgmap_from_df(self.paper_metrics.cited))
     
     def _fetch_growth_rate(self):
-        df_growth_rate = self.paper_growth_metrics.paper(use_percent_age=False)
+        df_growth_rate = self.paper_growth_metrics.paper_growth(use_percent_age=False)
+        
         res = self.get_orgmap_from_df(df_growth_rate)
         return res  
     
@@ -236,8 +276,8 @@ class PresidentWOSAnalysis(Analysis):
             )
             return [where]
         m.get_where_clauses = get_where_clauses
-        df_scie_paper_count = m.main_paper_count()
-        df_scie_growth_rate = m.calculate_growth_rate(input_data=df_scie_paper_count, use_percent_age=False)
+        df_scie_paper_count = m.main_paper_count
+        df_scie_growth_rate = m.paper_growth(use_percent_age=False)
         res = {
             PAPER_COUNT : self.get_orgmap_from_df(df_scie_paper_count),
             GROWTH_RATE : self.get_orgmap_from_df(df_scie_growth_rate)
@@ -256,8 +296,8 @@ class PresidentWOSAnalysis(Analysis):
             )
             return [where]
         m.get_where_clauses = get_where_clauses
-        df_ssci_paper_count = m.main_paper_count()
-        df_ssci_growth_rate = m.calculate_growth_rate(input_data=df_ssci_paper_count, use_percent_age=False)
+        df_ssci_paper_count = m.main_paper_count
+        df_ssci_growth_rate = m.paper_growth(use_percent_age=False)
         res = {
             PAPER_COUNT : self.get_orgmap_from_df(df_ssci_paper_count),
             GROWTH_RATE : self.get_orgmap_from_df(df_ssci_growth_rate)
@@ -276,8 +316,9 @@ class PresidentWOSAnalysis(Analysis):
             )
             return [where]
         m.get_where_clauses = get_where_clauses
-        df_ahci_paper_count = m.main_paper_count()
-        df_ahci_growth_rate = m.calculate_growth_rate(input_data=df_ahci_paper_count, use_percent_age=False)
+
+        df_ahci_paper_count = m.main_paper_count
+        df_ahci_growth_rate = m.paper_growth(use_percent_age=False)
         res = {
             PAPER_COUNT : self.get_orgmap_from_df(df_ahci_paper_count),
             GROWTH_RATE : self.get_orgmap_from_df(df_ahci_growth_rate)
@@ -286,7 +327,7 @@ class PresidentWOSAnalysis(Analysis):
     
     def _fetch_first_or_reprint_author_paper_count(self):
         return self._with_first_or_reprint_subject(
-            lambda: self.get_orgmap_from_df(self.paper_metrics.main_paper_count()))
+            lambda: self.get_orgmap_from_df(self.paper_metrics.main_paper_count))
 
     def _fetch_first_or_reprint_author_cited_count(self):
         return self._with_first_or_reprint_subject(
@@ -302,7 +343,7 @@ class PresidentWOSAnalysis(Analysis):
             where = self.get_subject_where_clause(db_schema.schema.PaperJrcSubjectInfo, selected_val, tbl)
             return [where]
         m.get_where_clauses = get_where_clauses
-        df_if_paper_count = m.main_paper_count()
+        df_if_paper_count = m.main_paper_count
         res = self.get_orgmap_from_df(df_if_paper_count)
         return res
     
@@ -313,9 +354,8 @@ class PresidentWOSAnalysis(Analysis):
         return self._get_if_paper_count(self.if_val_2/100)
 
     def _fetch_range_year_growth_rate(self):
-        select_years = self.selected_range_years #Util.get_year_range_list(min_y=int(self.min_year), max_y=int(self.max_year))
+        select_years = self.selected_range_years
         
-        partial_merge_periods = self.partial_merge_periods
         merged_paper_count_per_year = {}
         merged_paper_count_range_year = {}
 
@@ -330,43 +370,25 @@ class PresidentWOSAnalysis(Analysis):
                         raise PRISError(f"年份清單缺少 {r_y},無法計算 {range_y} 的三年論文數")
                     total += per_y_val
                 res[org_serial][range_y] = total
+        
+        def per_year_counts(key_for_year) -> dict:
+            return {y: self.paper_count.get(key_for_year(y), {}).get(y, 0) for y in self.years}
 
-        for org in self.orgs:
-            org_serial, start_year, end_year = self._split_orgs(org)
-                        
-            if (int(start_year), int(end_year)) != (1900, 2300):
-                continue
+        for report_org in self.report_org_list:
+            if report_org.key_by_year is None:
+                # 沒有合併設定:每年都用原始 key
+                merged_paper_count_per_year[report_org.org_serial] = per_year_counts(lambda y: report_org.org)
+            else:
+                # 有合併設定:每年用 key_by_year 決定的 key
+                merged_paper_count_per_year[report_org.org_serial] = per_year_counts(lambda y: report_org.key_by_year[y])
+            add_paper_count_range_year(merged_paper_count_range_year, report_org.org_serial, merged_paper_count_per_year[report_org.org_serial])
 
-            key_by_year = partial_merge_periods.get(org_serial, {})
-            org_key = org
-            org_serial = org_serial
+            if report_org.has_unmerged_row:
+                '''如果有部分合併的話'''
+                label = f"*{report_org.org_serial}"
+                merged_paper_count_per_year[label] = per_year_counts(lambda y: report_org.org)   # 未合併:原始 key
+                add_paper_count_range_year(merged_paper_count_range_year, label, merged_paper_count_per_year[label])
 
-            # 判斷是否有合併的資料，需要多一筆未合併的row
-            if not key_by_year:
-                merged_paper_count_per_year[org_serial] = {}
-                for y in self.years:
-                    cnt = self.paper_count.get(org_key,{}).get(y, 0)
-                    merged_paper_count_per_year[org_serial][y] = cnt
-                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
-                continue
-
-            merged_paper_count_per_year[org_serial] = {}
-            for y in self.years:
-                org_key = key_by_year[y]
-                cnt = self.paper_count.get(org_key,{}).get(y, 0)
-                merged_paper_count_per_year[org_serial][y] = cnt
-
-            add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
-
-            if len(set(key_by_year.values())) > 1:
-                org_serial = f"*{org_serial}"
-                merged_paper_count_per_year[org_serial] = {}
-                for y in self.years:
-                    # [Bug fix] 「*」列代表「未合併」,應使用原始 key(org);
-                    # 原本用的 org_key 是上面迴圈殘留的「最後一年的合併 key」,造成 * 列其實是合併資料。
-                    cnt = self.paper_count.get(org,{}).get(y, 0)    
-                    merged_paper_count_per_year[org_serial][y] = cnt
-                add_paper_count_range_year(merged_paper_count_range_year, org_serial, merged_paper_count_per_year[org_serial])
 
         return merged_paper_count_range_year
 
@@ -398,6 +420,10 @@ class PresidentWOSAnalysis(Analysis):
 
         self.min_year = str(min(int_years))
         self.max_year = str(max(int_years))
+
+        # 設定報表用的顯示年份
+        Template_WOS.set_year_list(self.years)
+        Template_WOS.set_range_year_list(self.selected_range_years)
         
         total = len(report.items) # 進度條用
         for idx, ritem in enumerate(report.items):
@@ -416,7 +442,7 @@ class PresidentWOSAnalysis(Analysis):
     
     ## 匯出
     def export(self, report : PresidentWOSReport, re_export: ReportExporter) -> str:
-        Template.set_rawdata_sheet_suffix(raw_data_str = "Rawdata")
+        Template_WOS.set_rawdata_sheet_suffix(raw_data_str = "Rawdata")
 
         print("準備匯出檔案....")
         # 匯出
@@ -459,7 +485,15 @@ class PresidentWOSAnalysis(Analysis):
     
     @cached_property
     def partial_merge_periods(self) -> dict[str, list[tuple[int, int]]]:
-        merger_orgs = {}
+        '''
+        取得有合併機構編號所要從資料抓取的機構key
+        因為要判斷合併起始或結束年份，所以有可能要抓的key不一樣
+        例如: TWU000001230100於2021年開始合併TWU000001233300，所以從2021年的資料要抓TWU000001233300_2021_2300
+        {2020 : TWU000001230100_1900_2300,2021 : TWU000001230100_2021_2300}
+        
+        依此類推
+        '''
+        need_merger_orgs = {}
         for org_serial, year_map in self.merge_orgs.items():
             periods = []
 
@@ -470,9 +504,9 @@ class PresidentWOSAnalysis(Analysis):
                     periods.append((start_year, end_year))
                 
             if periods:
-                merger_orgs[org_serial] = periods
+                need_merger_orgs[org_serial] = periods
         key_by_year = {}
-        for k,v in merger_orgs.items():
+        for k,v in need_merger_orgs.items():
             # 再建立 A 正式列：每年決定要取哪一個 key
             
             key_by_year[k] = {}
@@ -501,42 +535,31 @@ class PresidentWOSAnalysis(Analysis):
         """共用的前置處理:拆解 org 字串,回傳 (org_serial, name1, name2) 的清單"""
         splited_org = org.split("_")
         return (splited_org[0], splited_org[1], splited_org[2])
-        
+
+
+
 
     def _build_rows(self, compute_func) -> tuple[list, list]:
         """
         共用的組裝流程,compute_func 是每個 sN 專屬的計算邏輯,
-        接收 (org_serial, name1, name2),回傳這筆資料的 temp_row(如果有)。
+        接收 (org, temp_rows, key_by_year=None),把這筆資料 append 到 temp_rows。
+        列順序:有部分年度合併時,先「*機構編碼」(未合併查驗列),再正式列。
         """
         temp_rows = []
         basic_rows = []
-        org_selected : PaperOrgSelectedValue = self.subjects.WOSselectedVal1
-        partial_merge_periods = self.partial_merge_periods
-        for org in self.orgs:
-            org_serial, start_year, end_year = self._split_orgs(org)
-            
-            if (int(start_year), int(end_year)) != (1900, 2300):
+        for plan in self.report_org_list:
+            if plan.key_by_year is None:
+                compute_func(plan.org, temp_rows)
+                basic_rows.append([plan.org_serial, plan.name1, plan.name2])
                 continue
 
-            org_serial, name1, name2 = org_selected.find_org(org_serial)
+            if plan.has_unmerged_row:
+                compute_func(plan.org, temp_rows)
+                basic_rows.append([f"*{plan.org_serial}", plan.name1, plan.name2])
 
-            key_by_year = partial_merge_periods.get(org_serial, {})
-            
-            # 判斷是否有合併的資料，需要多一筆未合併的row
-            if not key_by_year:
-                compute_func(org, temp_rows)
-                basic_rows.append([org_serial, name1, name2])
-                continue
-
-            if len(set(key_by_year.values())) > 1:
-                # 有部分年度合併：先新增 *A 未合併查驗列
-                compute_func(org, temp_rows)
-                basic_rows.append([f"*{org_serial}", name1, name2])
-
-            compute_func(org, temp_rows, key_by_year)
-            
-            basic_rows.append([org_serial, name1, name2])
-
+            compute_func(plan.org, temp_rows, plan.key_by_year)
+            basic_rows.append([plan.org_serial, plan.name1, plan.name2])
+        
         return temp_rows, basic_rows
 
     def get_s1_rows(self):   
@@ -549,7 +572,6 @@ class PresidentWOSAnalysis(Analysis):
                     org_key = org
 
                 cnt = self.paper_count.get(org_key,{}).get(y, 0)
-                #gr = self.growth_rate_without_year.get(org_key,{}).get(y, "")
                 gr = self.growth_rate.get(org_key,{}).get(y, "")
                 res_org_val.extend([str(cnt),str(gr)])
             temp_rows.append(res_org_val)
@@ -568,8 +590,8 @@ class PresidentWOSAnalysis(Analysis):
                 cnt = self.paper_count.get(org_key,{}).get(y, 0)
                 first_or_reprint_author_cnt = self.first_or_reprint_author_paper_count.get(org_key,{}).get(y, 0)
             
-                proportion = self.get_ratio(first_or_reprint_author_cnt, cnt) #0 if cnt == 0 else first_or_reprint_author_cnt / cnt
-                res_org_val.extend([str(cnt),str(first_or_reprint_author_cnt),str(proportion)])
+                proportion = Util.get_ratio(cnt, first_or_reprint_author_cnt)
+                res_org_val.extend([str(cnt),str(first_or_reprint_author_cnt),proportion])
             temp_rows.append(res_org_val)
 
         return self._build_rows(compute)
@@ -586,8 +608,8 @@ class PresidentWOSAnalysis(Analysis):
                 cited = self.cited_count.get(org_key,{}).get(y, 0)
                 first_or_reprint_author_cited = self.first_or_reprint_author_cited_count.get(org_key,{}).get(y, 0)
             
-                proportion = self.get_ratio(first_or_reprint_author_cited, cited)# 0 if cited == 0 else first_or_reprint_author_cited / cited
-                res_org_val.extend([str(cited),str(first_or_reprint_author_cited),str(proportion)])
+                proportion = Util.get_ratio(cited, first_or_reprint_author_cited) #self.get_ratio(first_or_reprint_author_cited, cited)# 0 if cited == 0 else first_or_reprint_author_cited / cited
+                res_org_val.extend([str(cited),str(first_or_reprint_author_cited),proportion])
             temp_rows.append(res_org_val)
 
         return self._build_rows(compute)
@@ -645,7 +667,6 @@ class PresidentWOSAnalysis(Analysis):
 
     def get_s7_rows(self):
         def compute(org:str, temp_rows:list, merge_key:dict = None):
-                    
             cnt_list = []
             if_1_cnt_list = []
             if_2_cnt_list = []
@@ -664,8 +685,8 @@ class PresidentWOSAnalysis(Analysis):
                     if_1_cnt_list.extend(["0","0"])
                     if_2_cnt_list.extend(["0","0"])
                 else:
-                    if_1_cnt_list.extend([str(if_1_cnt), str(self.get_ratio(if_1_cnt, cnt))])
-                    if_2_cnt_list.extend([str(if_2_cnt), str(self.get_ratio(if_2_cnt, cnt))])
+                    if_1_cnt_list.extend([str(if_1_cnt), Util.get_ratio(cnt, if_1_cnt)])
+                    if_2_cnt_list.extend([str(if_2_cnt), Util.get_ratio(cnt, if_2_cnt)])
 
             temp_rows.append(cnt_list)
             temp_rows.append(if_1_cnt_list)
@@ -687,39 +708,24 @@ class PresidentWOSAnalysis(Analysis):
 
     def _build_s9_rows(self, compute_func) -> tuple[list, list]:
         """
-        共用的組裝流程,compute_func 是每個 sN 專屬的計算邏輯,
-        接收 (org_serial, name1, name2),回傳這筆資料的 temp_row(如果有)。
+        S9 的組裝流程。與 _build_rows 的差別:列順序是「正式列在前、*未合併列在後」,
+        且 compute_func 只接收列標籤(org_serial 或 *org_serial)。
         """
         temp_rows = []
         basic_rows = []
-        org_selected : PaperOrgSelectedValue = self.subjects.WOSselectedVal1
-        partial_merge_periods = self.partial_merge_periods
-        for org in self.orgs:
-            #org_serial, name1, name2 = self._split_orgs(org)
-            org_serial, start_year, end_year = self._split_orgs(org)
-            has_original = False
-            if (int(start_year), int(end_year)) != (1900, 2300):
-                continue
+        for report_org in self.report_org_list:
+            compute_func(report_org.org_serial, temp_rows)
+            basic_rows.append([report_org.org_serial, report_org.name1, report_org.name2])
 
-            org_serial, name1, name2 = org_selected.find_org(org_serial)
-
-            key_by_year = partial_merge_periods.get(org_serial, {})
-            
-            # 判斷是否有合併的資料，需要多一筆未合併的row
-            if key_by_year:
-                if len(set(key_by_year.values())) > 1:
-                    has_original = True
-            compute_func(org_serial, temp_rows)
-            basic_rows.append([org_serial, name1, name2])
-
-            if has_original:
-                org_serial = f"*{org_serial}"
-                compute_func(org_serial, temp_rows)
-                basic_rows.append([org_serial, name1, name2])
+            if report_org.has_unmerged_row:
+                label = f"*{report_org.org_serial}"
+                compute_func(label, temp_rows)
+                basic_rows.append([label, report_org.name1, report_org.name2])
 
         return temp_rows, basic_rows
     
     def get_s9_rows(self):
+        '''S9 - self.range_year 年的論文成長率'''
         ## 將年份改成 3年，2年重複的形式(2020-2022、2021-2023...etc)
         select_years = self.selected_range_years
         def compute(org:str, temp_rows:list):
@@ -732,6 +738,10 @@ class PresidentWOSAnalysis(Analysis):
 
     @staticmethod
     def get_orgmap_from_df(df : pd.DataFrame, skip_years :list[str] = None) -> ORG_MAP:
+        '''
+        將dataFrame整理成ORG_MAP 
+        return {Org_DB_Select_key : {year : val}}
+        '''
         res : ORG_MAP = {}
 
         # [優化] iterrows 每列都建立 Series,改用欄位 zip
@@ -750,9 +760,4 @@ class PresidentWOSAnalysis(Analysis):
 
         return res
 
-    @staticmethod
-    def get_ratio(val:float, sum:float)-> float:
-        if sum == 0: 
-            return 0
-        return val/sum
             

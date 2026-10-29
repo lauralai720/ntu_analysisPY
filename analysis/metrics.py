@@ -7,11 +7,11 @@ import pandas as pd
 
 # PRIS 相關套件
 import common.db_schema as db_schema
+import common.util as Util
+import analysis.data_analysis as DataAnalysis
 from components.subjects import Subjects
 from dal_provider import get_dal
 from components.year_selector import ESIYear
-import common.util as Util
-from . import data_analysis as DataAnalysis
 from database import *
 from exceptions import PRISError
 
@@ -72,22 +72,22 @@ class ReplaceSubject:
 
 @dataclass
 class ComputeObject:
-    main_column : Optional["Column"] = None
-    bind_column : Optional["Column"] = None
-    subject1_bind_col_name : str = ""
-    subject2_bind_col_name : str = ""
-    subject_year_bind_col_name : str = ""
-    join_table : Optional["JoinTable"] = None
-    table : Optional["Table"] = None
-    main_table : Optional["Table"] = None
-    distinct : bool = False
-    subjects : Optional[Subjects] = None
+    main_column : Optional["Column"] = None     # 主欄位
+    bind_column : Optional["Column"] = None     # join欄位
+    subject1_bind_col_name : str = ""           # 暫存表1 join的欄位
+    subject2_bind_col_name : str = ""           # 暫存表2 join的欄位
+    subject_year_bind_col_name : str = ""       # 時間暫存表 join的欄位
+    join_table : Optional["JoinTable"] = None   # join table, for compute_table used
+    table : Optional["Table"] = None            # table, for compute_table used
+    main_table : Optional["Table"] = None       # 主要table，table or join_table
+    distinct : bool = False                     # 去重複化
+    subjects : Optional[Subjects] = None        # 暫存表列表(暫存表1 + 暫存表2 + 時間暫存表)
 
-    where_clauses: list["Where"] = field(default_factory=list)
-    replace_bind_col_of_subject1 : Optional["Column"] = None
-    replace_bind_col_of_subject2 : Optional["Column"] = None
-    replace_bind_col_of_year : Optional["Column"] = None
-    replace_subject1 : Optional[ReplaceSubject] = None
+    where_clauses: list["Where"] = field(default_factory=list)      # 其他where條件
+    replace_bind_col_of_subject1 : Optional["Column"] = None        # 替換的暫存表1 join欄位
+    replace_bind_col_of_subject2 : Optional["Column"] = None        # 替換的暫存表2 join欄位
+    replace_bind_col_of_year : Optional["Column"] = None            # 替換的暫存表時間 join欄位
+    replace_subject1 : Optional[ReplaceSubject] = None              # 替換的暫存表1
     replace_subject2 : Optional[ReplaceSubject] = None
     replace_subject3 : Optional[ReplaceSubject] = None
     extra_bind1_columns : Optional[dict[str, "Column"]] = None
@@ -222,13 +222,13 @@ class Metrics(ABC):
 
     get_where_clauses: Callable[["Table"], list["Where"]] = None
 
+    @cached_property
     def main_paper_count(self) -> pd.DataFrame:
         res_df = self.get_count(db_schema.schema.MainBindColumnName)
         return res_df
-        #return dal.datatable_to_dataframe(res_dt)
+
 
     def get_main_table_and_bind_col(self) -> tuple["Table", "Column"]:
-        #dal = get_dal()
         main_table = dal.create_table(db_schema.schema.MainTableName)
         bind_col = None
         if db_schema.schema.MainBindColumnName is not None:
@@ -705,6 +705,7 @@ class ESIMetrics(Metrics):
 class PaperMetrics(Metrics):
     @cached_property
     def cited(self) -> pd.DataFrame:
+        ''''''
         compute_object = self.get_compute_object_with_join_table(db_schema.schema.MainBindColumnName, db_schema.schema.CitationsCountTableName, db_schema.schema.MainBindColumnName, db_schema.schema.MainBindColumnName, dist=True)
         col_cited_count = compute_object.get_joined_right_table().RetrieveColumn(db_schema.schema.CitedCountColumnName)
         compute_object.add_keep_col(col_cited_count)
@@ -717,6 +718,7 @@ from common.year import Year
 
 @dataclass 
 class GrowthRate(Metrics):
+    '''成長率相關指標基底'''
     _pre_year_list: list[Year] | None = None
     ori_year_list: list[str] | None = None
 
@@ -743,7 +745,11 @@ class GrowthRate(Metrics):
 
         return pre_year_list
 
-    def calculate_growth_rate(self, input_data, use_percent_age: bool = True, na_val_notation=None) -> pd.DataFrame:
+    def calculate_growth_rate(self, use_percent_age: bool = True, na_val_notation=None) -> pd.DataFrame:
+        '''取得成長率，資料來源為main_paper_count'''
+        
+        input_data = self.main_paper_count
+
         if self.subjects.subject1 is None:
             y_idx = 0
         elif self.subjects.subject2 is None:
@@ -800,8 +806,9 @@ class PaperList(Metrics):
 
 @dataclass
 class PaperGrowthRateMetric(GrowthRate):
-    def paper(self, use_percent_age : bool = True, na_val_notation = None)-> pd.DataFrame:
-        return self.calculate_growth_rate(self.main_paper_count(), use_percent_age=use_percent_age, na_val_notation=na_val_notation)
+    def paper_growth(self, use_percent_age : bool = True, na_val_notation = None)-> pd.DataFrame:
+        res = self.calculate_growth_rate(use_percent_age=use_percent_age, na_val_notation=na_val_notation)
+        return res
 
 @dataclass 
 class Indicator(Metrics):
@@ -817,7 +824,7 @@ class Indicator(Metrics):
         return self.list_metrics.cited_count()
 
     def avg_cited(self, df_cited : pd.DataFrame = None) -> pd.DataFrame:
-        df_num = self.metrics.main_paper_count()
+        df_num = self.metrics.main_paper_count
         if df_cited is None:      # [Bug fix] `not DataFrame` 會丟 ValueError(truth value is ambiguous)
             df_cited = self.metrics.cited
         

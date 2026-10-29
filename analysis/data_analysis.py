@@ -3,8 +3,10 @@ import pandas as pd
 import common.util as Util
 
 def is_subject_match(row, subjs):
-    # 假設 subjs 是一個 list，row 是 pandas.Series
-    # 若 subjs 任何一個為 None，或與 row 前 n 個欄位有不同則回傳 False
+    '''
+    假設 subjs 是一個 list，row 是 pandas.Series
+    若 subjs 任何一個為 None，或與 row 前 n 個欄位有不同則回傳 False
+    '''
     for i, subj in enumerate(subjs):
         if subj != row.iloc[i]:
             return False
@@ -22,27 +24,38 @@ def serialize_multi_string_to_single(subjs):
     # 這裡請根據你的實際序列化規則實作
     return '|'.join(str(s) for s in subjs)
 
+def df_column_rename(df : pd.DataFrame, index:int, rename:str) -> pd.DataFrame:
+    '''將df指定欄位位置的col改名'''
+    value_col = df.columns[index]
+    df_new = df.rename(columns={value_col: rename})
+    return df_new
 
 # A02_SumUp.Calculate
 # [優化] 原本用 iterrows + `ret.loc[len(ret)] = ...` 逐筆累加(每次 loc 新增列都是 O(n) 的複製 → 整體 O(n^2)),
 #        改為排序後 groupby 加總。輸出欄位、列順序、dtype 與原版一致(見 tests/test_data_analysis_equiv.py)。
 def a02_sumup_calculate(df : pd.DataFrame) -> pd.DataFrame:
+    '''
+    原PRIS A02_SumUp.Calculate
+    '''
     subj_num = df.shape[1] - 1
     columns_list = list(df.columns)
     columns_list[subj_num] = "Sum"
 
-    sort_cols = list(df.columns[:subj_num])
-    work = df.sort_values(by=sort_cols, ascending=[True]*(subj_num-1) + [False])
+    group_cols = list(df.columns[:subj_num])
+    work = df.sort_values(by=group_cols, ascending=[True]*(subj_num-1) + [False])
     value_col = df.columns[subj_num]
     # 原版是逐筆 int(...) 後相加,這裡同樣先轉整數(含「小數截斷」行為),再加總
     work = work.assign(**{value_col: work[value_col].astype("int64")})
 
-    ret = (work.groupby(sort_cols, sort=False, dropna=False, as_index=False)[value_col].sum())
+    ret = (work.groupby(group_cols, sort=False, dropna=False, as_index=False)[value_col].sum())
     ret.columns = columns_list
     return ret.reset_index(drop=True)
 
 # B22_Ranking.Calculate
 def b22_ranking_calculate(df : pd.DataFrame, analysis_idx:int = 0) -> pd.DataFrame:
+    '''
+    原PRIS B22_Ranking.Calculate
+    '''
     df_ret = df.copy()
     value_col = df_ret.columns[-1]
     df_ret[value_col] = pd.to_numeric(df_ret[value_col], errors='coerce')
@@ -72,6 +85,9 @@ def b22_ranking_calculate(df : pd.DataFrame, analysis_idx:int = 0) -> pd.DataFra
 # [優化] 原本 df.apply(axis=1) 逐列呼叫 python 函式;改為向量運算,規則不變:
 #   無法轉數字 → 0;分母(columns[-1])為 0 → 0;否則 columns[-2] / columns[-1],decimals>=0 時四捨五入
 def a08_cntavg_calculate( df : pd.DataFrame, decimals:int = -1) -> pd.DataFrame:
+    '''
+    原PRIS A08_CntAvg.Calculate
+    '''
     ret = df.copy()
     denom_col = df.columns[-2]
     num_col = df.columns[-1]
@@ -87,32 +103,11 @@ def a08_cntavg_calculate( df : pd.DataFrame, decimals:int = -1) -> pd.DataFrame:
     ret['CntAvg'] = avg
     return ret
 
-
-# # B06_H_Index.Calculate
-# # [Bug fix] 原版呼叫 copy_subject_value_to_row(subjs) 少一個參數且該函式沒有回傳值,
-# #           而且用 DataFrame 的 index label 判斷「第一列」(排序後 label 不一定是 0) → 一旦被呼叫就會 TypeError。
-# # 輸入: [主題欄...][辨識欄][被引次數],各主題內須依被引次數遞減排序(PaperList.cited_count 已排序)。
-# def b06_h_index_calculate(df : pd.DataFrame) -> pd.DataFrame:
-#     subj_cols = list(df.columns[:-2])
-#     cited_col = df.columns[-1]
-#     cited = pd.to_numeric(df[cited_col], errors="coerce").fillna(0).astype("int64")
-#     work = df[subj_cols].copy()
-#     work["_c"] = cited.values
-
-#     def h(vals):
-#         v = sorted(vals, reverse=True)
-#         return sum(1 for i, c in enumerate(v, 1) if c >= i)
-
-#     if subj_cols:
-#         res = work.groupby(subj_cols, sort=False, dropna=False)["_c"].apply(h).reset_index()
-#     else:
-#         res = pd.DataFrame({"_c": [h(work["_c"])]})
-#     res.columns = subj_cols + ["H-Index"]
-#     return res
-
-
 # A08_CntAvg.Calculate JOIN
 def a08_cntavg_calculate_join(df_1 : pd.DataFrame,df_2 : pd.DataFrame, decimals:int = -1) -> pd.DataFrame:
+    '''
+    A08_CntAvg.Calculate 先join兩個dataframe
+    '''
     join_df = Util.join_dataframes(df_1, df_2)
     df = a08_cntavg_calculate(join_df, decimals=decimals)
     return df
@@ -162,30 +157,18 @@ def compare_to_previous_years(df, year_col_idx, ori_year_list, pre_year_func, pr
     return result_df
 
 
-# ---------------------------------------------------------------------------
-# 成長率:S4(逐年,資料來自 DB)與 S9(三年區間,資料來自已合併的 dict)共用同一個公式
-# ---------------------------------------------------------------------------
-def calc_growth_rate(pre_val, cur_val, use_percentage: bool = False, na_val="N/A", ndigits: int = 4):
-    """(cur - pre) / pre,四捨五入到 ndigits 位;前期為 0 時回傳 na_val。"""
-    if pre_val != 0:
-        growth_rate = round((cur_val - pre_val) / pre_val, ndigits)
-        if use_percentage:
-            growth_rate *= 100
-        return growth_rate
-    return na_val
-
-
 def growth_rate_series(values: list, use_percentage: bool = False, na_val="") -> list:
     """依序計算一串數值的成長率:第一期沒有前期 → ""(空白);前期為 0 → na_val。"""
-    return [""] + [calc_growth_rate(p, c, use_percentage, na_val) for p, c in zip(values, values[1:])]
+    return [""] + [Util.get_growth_rate(p, c, use_percentage=use_percentage, default_na=na_val, ndigits=4) for p, c in zip(values, values[1:])]
 
 
 # GrowthRate.Calculate
 def growth_rate_calculate(df : pd.DataFrame, year_col_idx:int, ori_years : list[str], per_year_func, use_percentage: bool = True, na_val_notation=None) -> pd.DataFrame:
+    '''依年份對應數值來計算成長率'''
     na_val = na_val_notation if na_val_notation is not None else "N/A"
 
     def rate(pre_y_val, val):
-        return calc_growth_rate(pre_y_val, val, use_percentage, na_val)
+        return Util.get_growth_rate(pre_y_val, val, use_percentage=use_percentage, default_na=na_val, ndigits=4)
 
     return compare_to_previous_years(df, year_col_idx, ori_years, per_year_func, rate, na_val_notation)
 

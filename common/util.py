@@ -1,138 +1,31 @@
 import math
 import pandas as pd
+from typing import TypeVar, Callable
+
 from config import *
 
+T = TypeVar("T")
 
-# class DataTableFormatter:
-#     def __init__(self,s1_h:str,s2_h:str,y_h:str,ex_list:list[str] = None):
-#         #self.set_data: set[tuple[str, ...]] = set()
-#         self.set_data_dict = {} # 因為python的set基本上會打亂，先改用dict存，讓出來的結果跟C#一樣
-#         self.table:list[tuple[dict[tuple[str, ...], str], str, str]] = []
-#         self.extenion: list[str] = ex_list
-#         self.s1_header: str = s1_h
-#         self.s2_header: str = s2_h
-#         self.year_header: str = y_h
-
-#     def add(self, df:pd.DataFrame, default_val:str = "0", name:str | None = None):
-        
-#         last_column_name = df.columns[-1]
-
-#         key_list = df.apply(lambda row: self.get_str_array(row, self.s1_header, self.s2_header,self.year_header, self.extenion),axis=1).to_list()
-
-#         # 3. 提取最後一欄的所有數值
-#         values = df[last_column_name].astype(str)
-
-#         self.set_data_dict.update(dict.fromkeys(key_list))
-
-#         # 5. 用 zip 打包成當前表格的字典
-#         current_dict = dict(zip(key_list, values))
-#         self.table.append((current_dict, name if name is not None else df.table_name, default_val))
+def try_parse(value: object, target_type: Callable[[object], T], default: T) -> tuple[bool, T]:
+    '''轉換型態'''
+    try:
+        return True, target_type(value)
+    except (ValueError, TypeError):
+        return False, default
 
 
-#     def create_data_frame(self, set_data_keys, s1: str, s2: str, s3: str, extension: list[str]) -> pd.DataFrame:
-#         # 1. 動態組合出所有的欄位名稱 (Headers)
-#         headers = []
-#         if s1 is not None: headers.append(s1)
-#         if s2 is not None: headers.append(s2)
-#         if s3 is not None: headers.append(s3)
-#         if extension is not None: headers.extend(extension)
-        
-#         # 2. 將集合轉成二維 List。
-#         # 因為 Python 的 DataFrame 可以直接吃這種結構，完全不需要手動一筆一筆建立 Row
-#         matrix_data = [list(item) for item in set_data_keys]
-        
-#         # 3. 一行建立 DataFrame
-#         df = pd.DataFrame(matrix_data, columns=headers)
-#         return df
-
-#     def convert_dict_to_data_frame(
-#         self,
-#         df: pd.DataFrame, 
-#         inner_dict: dict[tuple[str, ...], str], 
-#         column_name: str, 
-#         s1: str, s2: str, s3: str, 
-#         suffix: str, 
-#         default_val: str, 
-#         extension: list[str]
-#     ) -> None:
-        
-#         # 1. 決定要拿哪幾個欄位來當作比對的 Key (等同於 C# 的 getStringArray 邏輯)
-#         key_columns = []
-#         if s1 is not None: key_columns.append(s1)
-#         if s2 is not None: key_columns.append(s2)
-#         if s3 is not None: key_columns.append(s3)
-#         if extension is not None: key_columns.extend(extension)
-        
-#         # 2. 定義防呆回傳值 (等同於 $"{defaultVal}{suffix}")
-#         fallback_val = f"{default_val}{suffix}"
-        
-#         # 3. 核心行：將指定的欄位組合轉成 tuple，並直接去 dict 撈資料
-#         #    (axis=1 代表按列處理。tuple(row) 會把那一列選定欄位的值打包成不可變的 tuple，與字典對齊)
-#         df[column_name] = df.apply(
-#             lambda row: inner_dict.get(
-#                 self.get_str_array(row, self.s1_header, self.s2_header, self.year_header, self.extenion),
-#                 fallback_val
-#             ),
-#             axis=1
-#         )
-#     ## 原C# function 是回傳 DataTable
-#     def get_data_frame(self, suffix: str = None) -> pd.DataFrame:
-#         # 1. 呼叫上面的優化函式，建立初始的 DataFrame
-#         df = self.create_data_frame(self.set_data_dict.keys(), self.s1_header, self.s2_header, self.year_header, self.extenion)
-        
-#         # 2. 處理 suffix 的預設值 (等同於 suffix = suffix ?? "")
-#         if suffix is None:
-#             suffix = ""
-            
-#         # 3. 遍歷那串複雜的 tables 結構
-#         #    item.Item1 -> inner_dict
-#         #    item.Item2 -> col_name
-#         #    item.Item3 -> status_or_whatever (對應你 C# 傳入 convertDictToDataTable 的倒數第二個參數)
-#         for inner_dict, col_name, extra_param in self.table:
-#             # 呼叫你原本對應的 convertDictToDataTable 邏輯
-#             # 注意：在 Python 中，物件是以「傳址」傳遞，所以功能會在 convert 函式內部直接修改 df
-#             self.convert_dict_to_data_frame(
-#                 df, inner_dict, col_name, 
-#                 self.s1_header, self.s2_header, self.year_header, 
-#                 suffix, extra_param, self.extenion
-#             )
-            
-#         return df
-    
-#     # 照原本function命名
-#     def get_str_array(self, row:pd.Series, subj1, subj2, subj3, extension: list[str]):
-#         i = 0
-#         s1 :str = None
-#         s2 :str = None
-#         s3 :str = None
-
-#         if subj1 is not None:
-#             s1 = str(row.iloc[i])
-#             i += 1
-#         if subj2 is not None:
-#             s2 = str(row.iloc[i])
-#             i += 1
-#         if subj3 is not None:
-#             s3 = str(row.iloc[i])
-#             i += 1
-
-#         ex :list[str] = None
-#         if extension is not None:
-#             ex =[]
-#             for j in range(len(extension)):
-#                 ex.append(str(row.iloc[i+j]))
-
-#         tmp = [s1, s2, s3]
-
-#         if ex is not None:
-#             tmp += ex
-
-#         return tuple(tmp)
+def str_to_title(s: str) -> str:
+    '''將字串轉成第一個自字母大寫(先轉全小寫在title化)'''
+    return s.lower().title()
 
 
 ## 因為如果值是數字，用string方式寫入excel欄位，excel會跳警告(是數字還是文字)
 ## 所以如果是數字要先轉換才不會有警告
 def convert_type(text_value):
+    '''
+    將數字字串轉成純數字(int、float)
+    因為如果值是數字，用string方式寫入excel欄位，excel會跳警告(是數字還是文字)
+    '''
     # 若為空值或 None 直接回傳
     if not text_value:
         return text_value
@@ -158,12 +51,20 @@ def convert_type(text_value):
         # 轉換失敗代表是純文字 (例如 "text")，直接回傳原字串
         return text_value
 
+def get_per_year_list(from_y:int, to_y:int) -> list[int]:
+    '''
+    有頭尾的年份，回傳逐年年份列表
+    例: 2018-2021 => [2018,2019,2020,2021]
+    '''
+    return list(range(from_y, to_y + 1))
+
+
 def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int = 0, year_range:int = YEAR_RANGE, format:int = 1) -> list[str]:
     '''
     可以輸入年份列表([2000,2001,2002...])或最小年跟最大年
     year_range為年份區間，例如year_range=3，區間為 2000-2002
     format = 1 逐年，2000-2002、2001-2003...
-    format = 2 連接上一個結束年，2000-2002、2003-2005...
+    format = 2 連接上一個結束年，2000-2002、2003-2005...[目前沒用到，保留彈性]
     '''
     if year_list:
         int_years = [int(x) for x in year_list]
@@ -185,7 +86,7 @@ def get_year_range_list(year_list:list[str] = None, min_y : int = 0, max_y :int 
 num_ch_list = ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
 def get_num_ch(i) -> str:
     '''
-    輸入數字，將數字轉國字數字字串
+    輸入數字(1-99)，將數字轉國字數字字串
     '''
     if (i <=0 or i >= 100):
         return "N"
@@ -231,11 +132,8 @@ def join_dataframes(df1, df2):
 
 def join_diff_dataframes(df1, df2, key_col_num:int)->pd.DataFrame:
     '''
-    將兩個不同欄位名稱的DataFrame做merge
-    key_col_num需替換成相同欄位名稱的數量
-    如果key_col_num=2 代表 前兩欄的欄位名稱會被替換成M1、M2
-    新的dataframe是替換名稱欄+最後一欄
-    之後丟給join_dataframes做合併
+    將兩個不同欄位名稱的DataFrame做merge，key_col_num需替換成相同欄位名稱的數量，如果key_col_num=2 代表 前兩欄的欄位名稱會被替換成M1、M2<br>
+    新的dataframe是替換名稱欄+最後一欄，之後丟給join_dataframes做合併
     '''
     key_cols = [f'M{i+1}' for i in range(key_col_num)]
 
@@ -250,5 +148,32 @@ def join_diff_dataframes(df1, df2, key_col_num:int)->pd.DataFrame:
 
     return df_merged
 
-def get_per_year_list(from_y:int, to_y:int) -> list[int]:
-    return list(range(from_y, to_y + 1))
+
+def get_ratio(a, b) -> str:
+    '''
+    比率，部分量(b) 占 總體量(a) 的關係
+    固定顯示小數點後 16 位
+    '''
+    a_res, a_f = try_parse(a, float, 0.0) #try_parse_float(sum)
+    b_res, b_f = try_parse(b, float, 0.0) #try_parse_float(val)
+    if a_res and b_res and a_f:
+        rat = b_f/a_f
+        rat = f"{rat:.16f}"
+        return rat
+    return ""
+
+
+def get_growth_rate(pre_val, cur_val, use_percentage:bool = False, default_na:str = "", ndigits:int=16) -> str:
+    '''
+    成長率，(目前的值cur_val-前一個值pre_val)/前一個值pre_val<br>
+    use_percentage = True 回傳成百分比(*100) ; default_na 設定N/A時defualt回傳值 ; ndigits 四捨五入到小數點第X位，預設16<br>
+    '''
+    pp_res, pre_f = try_parse(pre_val, float, 0.0) #try_parse_float(pre_val)
+    cp_res, cur_f = try_parse(cur_val, float, 0.0) #try_parse_float(cur_val)
+
+    if pp_res and cp_res and cur_f:
+        rat =  round((cur_f - pre_f) / pre_f, ndigits)
+        if use_percentage:
+            rat *= 100
+        return rat
+    return default_na

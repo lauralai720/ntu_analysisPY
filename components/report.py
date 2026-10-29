@@ -14,7 +14,7 @@ class Report:
 
     @property
     def output_file(self)->str:
-        now = datetime.now().strftime("%y%m%d%H%M")
+        now = datetime.now().strftime("%y%m%d%H%M%S")
         filename = f"{self.analysis_file_tag}{self.project_name}_{now}"
         output = f"{self.output_path}{filename}.xlsx"
 

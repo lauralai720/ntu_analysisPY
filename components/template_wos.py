@@ -25,7 +25,10 @@ class Template_WOS(Template):
     @classmethod
     def set_year_list(cls, years: list[str]):
         cls._year_list = years
-        cls._year_range_list = Util.get_year_range_list(years)
+        
+    @classmethod
+    def set_range_year_list(cls, range_years: list[str]):
+        cls._year_range_list = range_years
 
     @classmethod
     def get_year_list(cls, is_range:bool = False) -> list[str]:

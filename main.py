@@ -11,6 +11,7 @@ import sys
 from config import *
 
 # PRIS
+import common.util as Util
 from pris import run_report
 from exceptions import PRISError
 
@@ -49,13 +50,11 @@ def main():
             db_name = DEFAULT_DB_NAME 
             template_types = DEFAULT_TEMPLATE_TYPES
             org_ids = DEFAULT_ORG_IDS
-            year_list = DEFAULT_YEAR_LIST
+            year_list = list(map(str,Util.get_per_year_list(DEFAULT_FROM_YEAR, DEFAULT_TO_YEAR)))
             year_format = DEFAULT_YEAR_FORMAT
             target = DEFAULT_TARGET
             source_name = DEFAULT_SOURCE_NAME
-            # if_val_1 = DEFAULT_IF_1
-            # if_val_2 = DEFAULT_IF_2
-            # range_year = YEAR_RANGE
+
     else:
         if len(sys.argv) == 1:
             rprint(f"[red]非DEBUG ENV，請輸入參數[/red]")
@@ -77,10 +76,6 @@ def main():
             year_format = args.year_format
             target = args.target
             source_name = args.source_name
-            # if_val_1 = args.if_val_1
-            # if_val_2 = args.if_val_2
-            # range_year = args.range_year
-
 
     params = {
         "analysis_type" : analysis_type,
@@ -100,16 +95,13 @@ def main():
             "db_name":db_name,
             "target" : target,
             "year_format": year_format,
-            "source_name": source_name,
-            # "jcr_if_1": if_val_1,
-            # "jcr_if_2": if_val_2,
-            # "range_year" : range_year
+            "source_name": source_name
         })
         if DEBUG:
             params.update({
                 "jcr_if_1": DEFAULT_IF_1,
                 "jcr_if_2": DEFAULT_IF_2,
-                "range_year" : YEAR_RANGE
+                "range_year" : DEFAULT_YEAR_RANGE
             })
         else:
             if args.if_val_1 is not None:

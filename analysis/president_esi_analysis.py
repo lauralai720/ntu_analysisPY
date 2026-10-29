@@ -1,8 +1,6 @@
-from abc import ABC
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from datetime import datetime
-from typing import Callable, Generic, Optional, TypeVar, TypeAlias
+from typing import Callable, TypeAlias
 from pathlib import Path
 import pandas as pd
 from collections import defaultdict
@@ -11,12 +9,14 @@ from collections import defaultdict
 from dal_provider import get_dal
 from config import DEBUG
 import common.db_schema as db_schema
+import common.util as Util
 import analysis.data_analysis as DataAnalysis
 from components import *
 from components.template_esi import *
 from database import *
 from export.report_exporter import *
 from analysis.metrics import ESIMetrics
+from analysis.base_analysis import Analysis, ResettableLazy
 from exceptions import PRISError
 
 
@@ -26,79 +26,23 @@ dal = get_dal()
 FIELD_VERSION_VALUE: TypeAlias = dict[str, dict[str, str]]
 ORG_FIELD_VERSION_VALUE: TypeAlias = dict[str, dict[str, dict[str, str]]]
 
-def try_parse_int(s: str) -> tuple[bool, int]:
-    ##"""對應 C# 的 int.TryParse,回傳 (是否成功, 轉換結果)"""
-    try:
-        return True, int(s)
-    except (ValueError, TypeError):
-        return False, 0
-    
-def try_parse_float(string_val)-> tuple[bool, float]:
-    try:
-        # 成功轉型，回傳 (True, 數值)
-        return True, float(string_val)
-    except (ValueError, TypeError):
-        # 失敗（例如字串是 "abc" 或 None），回傳 (False, 預設值 0.0)
-        return False, 0.0
 
-
-class IResettable(ABC):
-    reset_request_time: Optional[datetime] = None  # 對應 static DateTime,所有子類別共用
-
-T = TypeVar("T")
-
-class ResettableLazy(IResettable, Generic[T]):
-    def __init__(self, value_factory: Callable[[], T]):
-        self._factory = value_factory
-        self._last_reset_time: Optional[datetime] = None
-        self._cached_value: Optional[T] = None # impl
-        self._has_value: bool = False
-
-    @property
-    def value(self) -> T:
-        self._init()
-        return self._cached_value
-
-    def _init(self):
-        needs_rebuild = (
-            self._last_reset_time is None
-            or not self._has_value
-            or (
-                IResettable.reset_request_time is not None
-                and self._last_reset_time < IResettable.reset_request_time
-            )
-        )
-
-        if needs_rebuild:
-            self._cached_value = self._factory()
-            self._has_value = True
-            self._last_reset_time = datetime.now()
-
-
-def try_get(map:ORG_FIELD_VERSION_VALUE, org_serial: str, ver:str, field:str = "1"):
-    return map.get(org_serial, {}).get(field,{}).get(ver,"")
-
-
-@dataclass
-class Analysis:
-    name : str = ""
-    subjects : Subjects = None
 
 @dataclass
 class FieldSubjectType:
-    subject : "Subject"
-    bind_cols : dict[str, "Column"]
-    selected_values : list[str]
-    shown_by_esiid : bool = False
+    subject : "Subject"                 # 條件 暫存表
+    bind_cols : dict[str, "Column"]     # 暫存表Join的欄位
+    selected_values : list[str]         # 條件的值
+    shown_by_esiid : bool = False       # show esi id
 
 
 @dataclass
 class PresidentESIAnalysis(Analysis):
-    main_ver : str = ""
-    comp_ver : str = ""
-    main_ver_short : str = ""
-    comp_ver_short : str = ""
-    get_where_clauses: Callable[["Table"], list["Where"]] = None
+    main_ver : str = ""         # 主要版本年份區間，x-y年
+    comp_ver : str = ""         # 比較版本年份區間，x-y年
+    main_ver_key : str = ""     # 主要版本的key 
+    comp_ver_key : str = ""     # 比較版本的key
+    get_where_clauses: Callable[["Table"], list["Where"]] = None    # 額外的where條件
 
     def __post_init__(self):
         self._esi_field_info = None
@@ -140,15 +84,13 @@ class PresidentESIAnalysis(Analysis):
         self._cited_world_rank_by_sub_fields = ResettableLazy(self._fetch_cited_world_rank_by_sub_fields)
         self._cited_asia_pacific_rank_by_sub_fields = ResettableLazy(self._fetch_cited_asia_pacific_rank_by_sub_fields)
 
-        self._field_paper_count_top3Org = ResettableLazy(self._fetch_field_paper_count_top3Org)
-        self._field_cited_top3Org = ResettableLazy(self._fetch_field_cited_top3Org)
+        self._field_paper_count_top_N_Org = ResettableLazy(self._fetch_field_paper_count_top_N_Org)
+        self._field_cited_top_N_Org = ResettableLazy(self._fetch_field_cited_top_N_Org)
 
-        if not self.name:
-            self.name = "ESI Data"
 
     @property
     def maj_fields_metrics(self) -> ESIMetrics:
-        return ESIMetrics(subjects=self.subjects, get_where_clauses=self.get_where_clauses)
+        return ESIMetrics(subjects=self.subjects, get_where_clauses=self.get_where_clauses)   
     
     @property
     def selected_orgs_str(self) -> list[str]:
@@ -257,11 +199,11 @@ class PresidentESIAnalysis(Analysis):
         return self._cited_asia_pacific_rank_by_sub_fields.value
     ### ==== F5、F6
     @property
-    def field_paper_count_top3Org(self) -> dict[str, list[str]]:
-        return self._field_paper_count_top3Org.value
+    def field_paper_count_top_N_Org(self) -> dict[str, list[str]]:
+        return self._field_paper_count_top_N_Org.value
     @property
-    def field_cited_top3Org(self) -> dict[str, list[str]]:
-        return self._field_cited_top3Org.value
+    def field_cited_top_N_Org(self) -> dict[str, list[str]]:
+        return self._field_cited_top_N_Org.value
 
 
     # 原本是在FieldPanel執行的，把值拉到Analysis存放
@@ -299,12 +241,12 @@ class PresidentESIAnalysis(Analysis):
     def _fetch_sub_field_id_to_name(self) -> dict[str,str]:
         cmd_str = f"SELECT {db_schema.schema.ESIIDColumnName}, ESI_Name_EN FROM AC_Manager.dbo.Category_ESI"
         q_res = dal.query_2d_raw(cmd_str)
-        return { q[0].strip() : self.to_title(q[1]).strip() for q in q_res}
+        return { q[0].strip() : Util.str_to_title(q[1]).strip() for q in q_res}
         
     def _fetch_all_field_esi_metrics(self) -> ESIMetrics:
-        from components.subjects import copy_subjects
+        import copy
         m = self.maj_fields_metrics
-        subjs = copy_subjects(m.subjects)
+        subjs = copy.deepcopy(m.subjects)
         # 要留意 C# 的 UseInstitutionSubject 沒處理，讓他恆為true
         subjs.subject2 = self.all_field_subject.subject
         subjs.subj2BindCol = self.all_field_subject.bind_cols
@@ -315,9 +257,9 @@ class PresidentESIAnalysis(Analysis):
         return m
     # getSubFieldsMetrics()
     def _fetch_sub_field_esi_metrics(self) -> ESIMetrics:
-        from components.subjects import copy_subjects
+        import copy
         m = self.maj_fields_metrics
-        subjs = copy_subjects(m.subjects)
+        subjs = copy.deepcopy(m.subjects)
         # 要留意 C# 的 UseInstitutionSubject 沒處理，讓他恆為true
         subjs.subject2 = self.sub_fields_subj.subject
         subjs.subj2BindCol = self.sub_fields_subj.bind_cols
@@ -450,7 +392,7 @@ class PresidentESIAnalysis(Analysis):
     def _fetch_cited_threshold_by_fields(self) -> dict[str,str]:
         cmd_str = (
             f"SELECT {db_schema.schema.ESICategoryColumnName}, MIN({db_schema.schema.CiteColumnName}) AS Threshold "
-            f"FROM {db_schema.schema.ESIRawDataForInstitutionTableName} WHERE {db_schema.schema.ESIUpdateTimeColumnName} = '{self.main_ver_short}' "
+            f"FROM {db_schema.schema.ESIRawDataForInstitutionTableName} WHERE {db_schema.schema.ESIUpdateTimeColumnName} = '{self.main_ver_key}' "
             f"GROUP BY {db_schema.schema.ESICategoryColumnName}"
         )
         q_res = dal.query_2d_raw(cmd_str)
@@ -461,7 +403,7 @@ class PresidentESIAnalysis(Analysis):
             f"SELECT {db_schema.schema.ESICategoryColumnName}, "
             f"CAST(SUM({db_schema.schema.CiteColumnName}) AS float) / CAST(SUM({db_schema.schema.PaperCountColumnName}) as float) AS AvgCited "
             f"FROM {db_schema.schema.ESIRawDataForInstitutionTableName} "
-            f"WHERE ({db_schema.schema.ESIUpdateTimeColumnName} = '{self.main_ver_short}') "
+            f"WHERE ({db_schema.schema.ESIUpdateTimeColumnName} = '{self.main_ver_key}') "
             f"GROUP BY {db_schema.schema.ESICategoryColumnName}"
         )
         q_res = dal.query_2d_raw(cmd_str)
@@ -490,7 +432,7 @@ class PresidentESIAnalysis(Analysis):
             f"SELECT DISTINCT {db_schema.schema.ESICategoryColumnName}, {db_schema.schema.OrgSerialColumnName}, SUM({db_col_name}) AS Total FROM ("
             f"SELECT DISTINCT {db_schema.schema.ESICategoryColumnName}, {db_schema.schema.OrgSerialColumnName}, {db_col_name} "
             f"FROM {db_schema.schema.ESIRawDataForInstitutionTableName} INST INNER JOIN {db_schema.schema.ACFirstTableName} ORG ON INST.{db_schema.schema.InstitutionColumnName} = ORG.{db_schema.schema.ACWordColumnName} "
-            f"WHERE {db_schema.schema.ESIUpdateTimeColumnName} = '{self.main_ver_short}' AND "
+            f"WHERE {db_schema.schema.ESIUpdateTimeColumnName} = '{self.main_ver_key}' AND "
             f"{db_schema.schema.Time_EndColumnName} IS NULL AND "
             f"{db_schema.schema.ESIACMainColumnName} = 1 AND " +
             f"{db_schema.schema.ESICategoryColumnName} IN ({cmd_field_clause}) AND " +
@@ -514,10 +456,10 @@ class PresidentESIAnalysis(Analysis):
         }
         return res
 
-    def _fetch_field_paper_count_top3Org(self) -> dict[str, list[str]]:
-        return self.get_top_3Org(db_schema.schema.PaperCountColumnName)
-    def _fetch_field_cited_top3Org(self) -> dict[str, list[str]]:
-        return self.get_top_3Org(db_schema.schema.CiteColumnName)
+    def _fetch_field_paper_count_top_N_Org(self) -> dict[str, list[str]]:
+        return self.get_top_N_Org(db_schema.schema.PaperCountColumnName)
+    def _fetch_field_cited_top_N_Org(self) -> dict[str, list[str]]:
+        return self.get_top_N_Org(db_schema.schema.CiteColumnName)
 
     ## 計算
     def run(self, report : PresidentESIReport) -> ReportExporter:
@@ -574,12 +516,12 @@ class PresidentESIAnalysis(Analysis):
                 "Country": so.country,
                 "NameCH": so.name_ch,
                 "NameEN": so.name_en,
-                "Count_MainVer": try_get(self.paper_count_all_fields, so.org_serial, self.main_ver_short),
-                "WorldRank_MainVer" : try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.main_ver_short),
-                "AsiaRank_MainVer" : try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.main_ver_short),
-                "Count_CompVer" : try_get(self.paper_count_all_fields, so.org_serial, self.comp_ver_short),
-                "WorldRank_CompVer":try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.comp_ver_short),
-                "AsiaRank_CompVer":try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.comp_ver_short),
+                "Count_MainVer": PresidentESIAnalysis.try_get(self.paper_count_all_fields, so.org_serial, self.main_ver_key),
+                "WorldRank_MainVer" : PresidentESIAnalysis.try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.main_ver_key),
+                "AsiaRank_MainVer" : PresidentESIAnalysis.try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.main_ver_key),
+                "Count_CompVer" : PresidentESIAnalysis.try_get(self.paper_count_all_fields, so.org_serial, self.comp_ver_key),
+                "WorldRank_CompVer":PresidentESIAnalysis.try_get(self.paper_count_world_rank_all_fields, so.org_serial, self.comp_ver_key),
+                "AsiaRank_CompVer":PresidentESIAnalysis.try_get(self.paper_count_asiap_rank_all_fields, so.org_serial, self.comp_ver_key),
             }
             res.append([
                 item["OrgSerial"], 
@@ -606,12 +548,12 @@ class PresidentESIAnalysis(Analysis):
                 "Country": so.country,
                 "NameCH": so.name_ch,
                 "NameEN": so.name_en,
-                "Cited_MainVer":  try_get(self.cited_all_fields, so.org_serial, self.main_ver_short),
-                "WorldRank_MainVer" : try_get(self.cited_world_rank_all_fields, so.org_serial, self.main_ver_short),
-                "AsiaRank_MainVer" : try_get(self.cited_asia_pacific_rank_all_fields, so.org_serial, self.main_ver_short),
-                "Cited_CompVer" : try_get(self.cited_all_fields, so.org_serial, self.comp_ver_short),
-                "WorldRank_CompVer": try_get(self.cited_world_rank_all_fields, so.org_serial, self.comp_ver_short),
-                "AsiaRank_CompVer": try_get(self.cited_asia_pacific_rank_all_fields, so.org_serial, self.comp_ver_short),
+                "Cited_MainVer": PresidentESIAnalysis.try_get(self.cited_all_fields, so.org_serial, self.main_ver_key),
+                "WorldRank_MainVer" :PresidentESIAnalysis.try_get(self.cited_world_rank_all_fields, so.org_serial, self.main_ver_key),
+                "AsiaRank_MainVer" :PresidentESIAnalysis.try_get(self.cited_asia_pacific_rank_all_fields, so.org_serial, self.main_ver_key),
+                "Cited_CompVer" :PresidentESIAnalysis.try_get(self.cited_all_fields, so.org_serial, self.comp_ver_key),
+                "WorldRank_CompVer":PresidentESIAnalysis.try_get(self.cited_world_rank_all_fields, so.org_serial, self.comp_ver_key),
+                "AsiaRank_CompVer":PresidentESIAnalysis.try_get(self.cited_asia_pacific_rank_all_fields, so.org_serial, self.comp_ver_key),
             }
             res.append([
                 item["OrgSerial"], 
@@ -631,8 +573,8 @@ class PresidentESIAnalysis(Analysis):
         return res
 
     def get_e3_rows(self) -> list[list[str]] :
-        main_rank = self.get_rank([(o.org_serial,try_get(self.avg_cited_all_fields, o.org_serial, self.main_ver_short )) for o in self.selected_orgs])
-        comp_rank = self.get_rank([(o.org_serial,try_get(self.avg_cited_all_fields, o.org_serial, self.comp_ver_short )) for o in self.selected_orgs])
+        main_rank = self.get_rank([(o.org_serial,PresidentESIAnalysis.try_get(self.avg_cited_all_fields, o.org_serial, self.main_ver_key )) for o in self.selected_orgs])
+        comp_rank = self.get_rank([(o.org_serial,PresidentESIAnalysis.try_get(self.avg_cited_all_fields, o.org_serial, self.comp_ver_key )) for o in self.selected_orgs])
         res = []
         for so in self.selected_orgs :
             item = {
@@ -640,9 +582,9 @@ class PresidentESIAnalysis(Analysis):
                 "Country": so.country,
                 "NameCH": so.name_ch,
                 "NameEN": so.name_en,
-                "AvgCited_MainVer":  try_get(self.avg_cited_all_fields, so.org_serial, self.main_ver_short),
+                "AvgCited_MainVer":  PresidentESIAnalysis.try_get(self.avg_cited_all_fields, so.org_serial, self.main_ver_key),
                 "Rank_MainVer" : main_rank[so.org_serial],
-                "AvgCited_CompVer" : try_get(self.avg_cited_all_fields, so.org_serial, self.comp_ver_short),
+                "AvgCited_CompVer": PresidentESIAnalysis.try_get(self.avg_cited_all_fields, so.org_serial, self.comp_ver_key),
                 "Rank_CompVer" : comp_rank[so.org_serial]
             }
             res.append([
@@ -667,10 +609,10 @@ class PresidentESIAnalysis(Analysis):
                 "Country": so.country,
                 "NameCH": so.name_ch,
                 "NameEN": so.name_en,
-                "PaperCount_MainVer":  try_get(self.paper_count_all_fields, so.org_serial, self.main_ver_short),
-                "HiCi_MainVer" : try_get(self.hici_all_fields, so.org_serial, self.main_ver_short),
-                "PaperCount_CompVer" : try_get(self.paper_count_all_fields, so.org_serial, self.comp_ver_short),
-                "HiCi_CompVer" : try_get(self.hici_all_fields, so.org_serial, self.comp_ver_short),
+                "PaperCount_MainVer": PresidentESIAnalysis.try_get(self.paper_count_all_fields, so.org_serial, self.main_ver_key),
+                "HiCi_MainVer" :PresidentESIAnalysis.try_get(self.hici_all_fields, so.org_serial, self.main_ver_key),
+                "PaperCount_CompVer" :PresidentESIAnalysis.try_get(self.paper_count_all_fields, so.org_serial, self.comp_ver_key),
+                "HiCi_CompVer" :PresidentESIAnalysis.try_get(self.hici_all_fields, so.org_serial, self.comp_ver_key),
             }
             res.append([
                 item["OrgSerial"], 
@@ -679,11 +621,11 @@ class PresidentESIAnalysis(Analysis):
                 item["NameEN"], 
                 item["PaperCount_CompVer"], 
                 item["HiCi_CompVer"],
-                PresidentESIAnalysis.get_ratio(item["PaperCount_CompVer"], item["HiCi_CompVer"]),
+                Util.get_ratio(item["PaperCount_CompVer"], item["HiCi_CompVer"]),
                 item["PaperCount_MainVer"],
                 item["HiCi_MainVer"],
-                PresidentESIAnalysis.get_ratio(item["PaperCount_MainVer"], item["HiCi_MainVer"]),
-                PresidentESIAnalysis.get_growth_rate(item["HiCi_CompVer"],item["HiCi_MainVer"])
+                Util.get_ratio(item["PaperCount_MainVer"], item["HiCi_MainVer"]),
+                Util.get_growth_rate(item["HiCi_CompVer"],item["HiCi_MainVer"])
             ])
 
         return res
@@ -696,8 +638,8 @@ class PresidentESIAnalysis(Analysis):
                 so.country,
                 so.name_ch,
                 so.name_en,
-                try_get(self.hot_all_fields, so.org_serial, self.comp_ver_short),
-                try_get(self.hot_all_fields, so.org_serial, self.main_ver_short)
+               PresidentESIAnalysis.try_get(self.hot_all_fields, so.org_serial, self.comp_ver_key),
+               PresidentESIAnalysis.try_get(self.hot_all_fields, so.org_serial, self.main_ver_key)
             ])
         return res
 
@@ -716,11 +658,11 @@ class PresidentESIAnalysis(Analysis):
             ]
             for _, sub_ids in self.maj_fields_and_sub_fields:
                 for sub_field_id in sub_ids:
-                    count = try_get(count_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
-                    world_rank_main_ver = try_get(world_rank_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
-                    world_rank_comp_ver = try_get(world_rank_by_sub_fields, org_info.org_serial, self.comp_ver_short, sub_field_id)
-                    asia_pacific_rank_main_ver = try_get(asia_pacific_rank_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
-                    asia_pacific_rank_comp_ver = try_get(asia_pacific_rank_by_sub_fields, org_info.org_serial, self.comp_ver_short, sub_field_id)
+                    count =PresidentESIAnalysis.try_get(count_by_sub_fields, org_info.org_serial, self.main_ver_key, sub_field_id)
+                    world_rank_main_ver =PresidentESIAnalysis.try_get(world_rank_by_sub_fields, org_info.org_serial, self.main_ver_key, sub_field_id)
+                    world_rank_comp_ver =PresidentESIAnalysis.try_get(world_rank_by_sub_fields, org_info.org_serial, self.comp_ver_key, sub_field_id)
+                    asia_pacific_rank_main_ver =PresidentESIAnalysis.try_get(asia_pacific_rank_by_sub_fields, org_info.org_serial, self.main_ver_key, sub_field_id)
+                    asia_pacific_rank_comp_ver =PresidentESIAnalysis.try_get(asia_pacific_rank_by_sub_fields, org_info.org_serial, self.comp_ver_key, sub_field_id)
                     world_rank_prog = PresidentESIAnalysis.try_diff(world_rank_comp_ver, world_rank_main_ver)
                     asia_pacific_prog = PresidentESIAnalysis.try_diff(asia_pacific_rank_comp_ver, asia_pacific_rank_main_ver)
 
@@ -749,9 +691,9 @@ class PresidentESIAnalysis(Analysis):
                 row.append(sub_field_name)
                 org_idx = 0
                 for org_info in self.selected_orgs:
-                    count = try_get(self.paper_count_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
-                    rank_main_ver = try_get(rank,org_info.org_serial, self.main_ver_short, sub_field_id)
-                    rank_comp_ver = try_get(rank,org_info.org_serial, self.comp_ver_short, sub_field_id)
+                    count =PresidentESIAnalysis.try_get(self.paper_count_by_sub_fields, org_info.org_serial, self.main_ver_key, sub_field_id)
+                    rank_main_ver =PresidentESIAnalysis.try_get(rank,org_info.org_serial, self.main_ver_key, sub_field_id)
+                    rank_comp_ver =PresidentESIAnalysis.try_get(rank,org_info.org_serial, self.comp_ver_key, sub_field_id)
                     rank_prog = PresidentESIAnalysis.try_diff(rank_comp_ver,rank_main_ver)
                     row += [count, rank_main_ver, rank_prog]
 
@@ -790,11 +732,11 @@ class PresidentESIAnalysis(Analysis):
 
                 org_idx = 0
                 for org_info in self.selected_orgs:
-                    cited = try_get(self.cited_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
-                    rank_main_ver = try_get(rank,org_info.org_serial, self.main_ver_short, sub_field_id)
-                    rank_comp_ver = try_get(rank,org_info.org_serial, self.comp_ver_short, sub_field_id)
+                    cited =PresidentESIAnalysis.try_get(self.cited_by_sub_fields, org_info.org_serial, self.main_ver_key, sub_field_id)
+                    rank_main_ver =PresidentESIAnalysis.try_get(rank,org_info.org_serial, self.main_ver_key, sub_field_id)
+                    rank_comp_ver =PresidentESIAnalysis.try_get(rank,org_info.org_serial, self.comp_ver_key, sub_field_id)
                     rank_prog = PresidentESIAnalysis.try_diff(rank_comp_ver,rank_main_ver)
-                    avg_cited = try_get(self.avg_cited_by_sub_fields, org_info.org_serial, self.main_ver_short, sub_field_id)
+                    avg_cited =PresidentESIAnalysis.try_get(self.avg_cited_by_sub_fields, org_info.org_serial, self.main_ver_key, sub_field_id)
                     row += [cited, rank_main_ver, rank_prog, avg_cited]
 
                     if cited != "":
@@ -819,29 +761,29 @@ class PresidentESIAnalysis(Analysis):
     def get_f4_rows(self) -> list[list[str]] :
         return self.get_f3_f4_rows(self.cited_asia_pacific_rank_by_sub_fields)
 
-    def get_f5_f6_rows(self, top3 : dict[str, list[str]], world_rank : ORG_FIELD_VERSION_VALUE, asia_pacific_rank : ORG_FIELD_VERSION_VALUE) -> list[list[str]] :
+    def get_f5_f6_rows(self, top_list : dict[str, list[str]], world_rank : ORG_FIELD_VERSION_VALUE, asia_pacific_rank : ORG_FIELD_VERSION_VALUE) -> list[list[str]] :
         res = []
         for maj_field_id, sub_ids in self.maj_fields_and_sub_fields:
             maj_field_name = self.maj_field_id_to_name[maj_field_id]
             for sub_field_id in sub_ids:
                 sub_field_name = self.sub_field_id_to_name[sub_field_id]
                 row = [maj_field_name, sub_field_name]
-                if sub_field_id in top3:
-                    org_ids = top3[sub_field_id]
+                if sub_field_id in top_list:
+                    org_ids = top_list[sub_field_id]
                     for org_id in org_ids:
                         org_info = self.org_infos[org_id]
                         name = org_info.name_ch
-                        wr = try_get(world_rank, org_info.org_serial, self.main_ver_short, sub_field_id)
-                        apr = try_get(asia_pacific_rank, org_info.org_serial, self.main_ver_short, sub_field_id)
+                        wr =PresidentESIAnalysis.try_get(world_rank, org_info.org_serial, self.main_ver_key, sub_field_id)
+                        apr =PresidentESIAnalysis.try_get(asia_pacific_rank, org_info.org_serial, self.main_ver_key, sub_field_id)
 
                         row += [name, wr, apr]
 
                 res.append(row)
         return res
     def get_f5_rows(self) -> list[list[str]] :
-        return self.get_f5_f6_rows(self.field_paper_count_top3Org, self.paper_count_world_rank_by_sub_fields, self.paper_count_asia_pacific_rank_by_sub_fields)
+        return self.get_f5_f6_rows(self.field_paper_count_top_N_Org, self.paper_count_world_rank_by_sub_fields, self.paper_count_asia_pacific_rank_by_sub_fields)
     def get_f6_rows(self) -> list[list[str]] :
-        return self.get_f5_f6_rows(self.field_cited_top3Org, self.cited_world_rank_by_sub_fields, self.cited_asia_pacific_rank_by_sub_fields)
+        return self.get_f5_f6_rows(self.field_cited_top_N_Org, self.cited_world_rank_by_sub_fields, self.cited_asia_pacific_rank_by_sub_fields)
 
     ### static Method =============================================================================================
     # 取得相對排名
@@ -852,7 +794,7 @@ class PresidentESIAnalysis(Analysis):
         nan_vals : set[str] = set()
         rows = []
         for org, val in avg_list:
-            parse_res, parse_val = try_parse_float(val)
+            parse_res, parse_val = Util.try_parse(val, float, 0.0) #try_parse_float(val)
             if parse_res:
                 rows.append([org, val])
             else:
@@ -867,11 +809,10 @@ class PresidentESIAnalysis(Analysis):
         return res
 
     @staticmethod
-    # tryGetIntDiff()
     def try_diff(a, b, nullStr = "") -> str:
         if a is not None and b is not None:
-            success_a, int_a = try_parse_int(a)
-            success_b, int_b = try_parse_int(b)
+            success_a, int_a = Util.try_parse(a, int, 0)
+            success_b, int_b = Util.try_parse(b, int, 0)
 
             if success_a and success_b :
                 return str(int_a-int_b)
@@ -901,26 +842,7 @@ class PresidentESIAnalysis(Analysis):
         return ret
 
     @staticmethod
-    def get_ratio(sum:str, val :str) -> str:
-        sp_res, sum_f = try_parse_float(sum)
-        vp_res, val_f = try_parse_float(val)
-        if sp_res and vp_res and sum_f:
-            rat = val_f/sum_f
-            rat = f"{rat:.16f}"
-            return rat
-        return ""
+    def try_get(map:ORG_FIELD_VERSION_VALUE, org_serial: str, ver:str, field:str = "1"):
+        return map.get(org_serial, {}).get(field,{}).get(ver,"")
 
-    @staticmethod
-    def get_growth_rate(pre_val :str, cur_val :str) -> str:
-        pp_res, pre_f = try_parse_float(pre_val)
-        cp_res, cur_f = try_parse_float(cur_val)
 
-        if pp_res and cp_res and cur_f:
-            rat = (cur_f - pre_f) / pre_f
-            rat = f"{rat:.16f}"
-            return rat
-        return ""
-
-    @staticmethod
-    def to_title(s: str) -> str:
-        return s.lower().title()

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol,Any
 
 import common.db_schema as db_schema
-import common.locale_manager as locale_manager
+
 import common.util as Util
 from exceptions import PRISError
 
@@ -20,10 +20,12 @@ class ESISubjectInfo:
 
     @property
     def name(self) -> str:
-        if locale_manager.lang == "zh-TW":
-            return self.nameCH
-        else:
-            return self.nameEN
+        return self.nameCH
+        # 如果有多國語言版本的話
+        # if locale_manager.lang == "zh-TW":
+        #     return self.nameCH
+        # else:
+        #     return self.nameEN
    
 
 ## PR_ESI 的 isAC 預設為true
@@ -32,11 +34,9 @@ class ESIInstitutionSubjectInfo(ESISubjectInfo):
 
         self.use_institution_subject = True
         
-        # SetMainTable(schema.ESIRawDataForInstitutionTableName);
         db_schema.schema.MainTableName = db_schema.schema.ESIRawDataForInstitutionTableName
 
         tbl = Table(db_schema.schema.ESIRawDataForInstitutionTableName)
-        # tbl = dal.create_table(db_schema.schema.ESIRawDataForInstitutionTableName)
         col_inst= tbl.RetrieveColumn(db_schema.schema.InstitutionColumnName)
 
         subj = None
@@ -321,6 +321,14 @@ class WOSPaperOrgSubjectInfo:
 
     # 抓出合併機構的資料
     def load_merge_orgs(self) -> dict :
+        '''
+        merge_list = {orgserial : { year_key : [orgserials]}}
+        example : merge_list = {
+            "TWU0000010222%" : {"1900_2300":["TWU0000012316%"]},
+            "TWU0000011200%" : {"1900_2300":["TWU00000113%","TWU00000114%"]}
+            "TWU0000012301%" : {"2021_2300":["TWU0000012333%"]}
+        }
+        '''
         from dal_provider import get_dal
         dal = get_dal()
         cmd_str = f"SELECT * FROM {db_schema.schema.OrgMerge};"
