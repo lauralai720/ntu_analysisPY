@@ -75,8 +75,8 @@ class ReportOrgInfo:
 
 @dataclass
 class PresidentWOSAnalysis(Analysis):
-    if_val_1:int = 15
-    if_val_2:int = 30
+    if_val_1:int = WOS_IF_1
+    if_val_2:int = WOS_IF_2
     range_year:int = YEAR_RANGE
     get_where_clauses: Callable[["Table"], list["Where"]] = None
     min_year : str = ""

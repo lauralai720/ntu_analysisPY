@@ -197,10 +197,10 @@ def check_esi_year_format(year_list:list[str])-> bool :
         return False
     return True
 
-def create_esi_report(template_types:list[int]):
-
+def create_esi_report(template_types:list[int], esi_anaylsis:PresidentESIAnalysis):
     report_dict = get_selected_templates(template_types)
     report = PresidentESIReport()
+    
     if len(report_dict) <= 0:
         print("empty list")
         return report
@@ -215,6 +215,9 @@ def create_esi_report(template_types:list[int]):
                     rprint(f"[red]{t_type}-{analysis_type}的設定為無法辨識的表單類型，請查看AC_Manager.Report_Type[/red]")
                     continue
 
+                if TemplateType(t_type) in [TemplateType.F5, TemplateType.F6]:
+                    name = name.format(Util.get_num_ch(esi_anaylsis.top_n))
+                
                 report_item = PresidentESIReportItem(name, TemplateType(t_type))
                 report_item.Index = order
                 report.items.append(report_item)
@@ -224,7 +227,14 @@ def create_esi_report(template_types:list[int]):
 
 # 跑PRIS 分析項目為 校長報表(ESI)
 #def run_president_esi_report(model_id:int, main_version: str, compare_version: str, output_path: str = "./output/") -> str:
-def run_president_esi_report(file_name:str, template_types : list[int], org_ids: list[str], field_ids:list[int], year_list:list[str], output_path: str = "./output/") -> str:
+def run_president_esi_report(
+        file_name:str, 
+        template_types : list[int], 
+        org_ids: list[str], 
+        fields:list[int], 
+        year_list:list[str], 
+        output_path: str = "./output/",
+        **other) -> str:
 
     if not check_esi_year_format(year_list) :
         raise PRISError(f"ESI - 年份數量或不正確，{year_list}")
@@ -236,20 +246,27 @@ def run_president_esi_report(file_name:str, template_types : list[int], org_ids:
     year_selector.set_versions(main_version,compare_version)
 
     if year_selector.selected_main is None or year_selector.selected_comp is None:
-        #rprint("[red]沒有選擇完整的年份區間,程式結束[/red]")
         raise PRISError(f"沒有選擇完整的年份區間")
 
-
-    # ## 載入模組及領域、機構等資料
-    str_field_ids = [str(f) for f in field_ids]
-    esi_report = create_esi_report(template_types)
+    # 領域、機構等資料
+    str_field_ids = list(map(str, fields)) #[str(f) for f in field_ids]
     project_name = file_name.format(Util.get_num_ch(len(org_ids)))
 
     ## 顯示Query後的資料
     print(f"{project_name} 中的 比較年份 : ")
     print(f"主要年份 - {year_selector.selected_main.get_verion_str()}({year_selector.selected_main.to_str(ESIYearStyle.Style2)})")
     print(f"比較年份 - {year_selector.selected_comp.get_verion_str()}({year_selector.selected_comp.to_str(ESIYearStyle.Style2)})")
+    print(f"分析領域 : {str_field_ids}")
 
+    esi_anaylsis = PresidentESIAnalysis()
+    # 設定部分參數的值(如果沒有就用預設值)
+    top_n = other.get("top_n",0)
+    if top_n >= 3 and top_n <= 10:
+        esi_anaylsis.top_n = top_n
+
+    print(f"各領域前N名機構 : 前{esi_anaylsis.top_n}名")
+
+    esi_report = create_esi_report(template_types, esi_anaylsis)
 
     if esi_report is not None:
         esi_report.output_path = output_path
@@ -261,12 +278,10 @@ def run_president_esi_report(file_name:str, template_types : list[int], org_ids:
             print(f"{x.Index}. {x.Name}")
 
         """ Run 計算 start from MainView.runAnalysis """
-        s_main_ver = str(year_selector.selected_main)
-        s_main_ver_key = year_selector.selected_main.get_verion_str()
-        s_comp_ver = str(year_selector.selected_comp)
-        s_comp_ver_key = year_selector.selected_comp.get_verion_str()
-
-        prESI_anaylsis = PresidentESIAnalysis(main_ver=s_main_ver,main_ver_key=s_main_ver_key,comp_ver=s_comp_ver,comp_ver_key=s_comp_ver_key)
+        esi_anaylsis.main_ver = str(year_selector.selected_main)
+        esi_anaylsis.main_ver_key = year_selector.selected_main.get_verion_str()
+        esi_anaylsis.comp_ver = str(year_selector.selected_comp)
+        esi_anaylsis.comp_ver_key = year_selector.selected_comp.get_verion_str()
 
         subj1_subjinfo = ESIInstitutionSubjectInfo("Institution", "機構")
         db_schema.schema.ESIInstitutionInfo = subj1_subjinfo
@@ -276,11 +291,11 @@ def run_president_esi_report(file_name:str, template_types : list[int], org_ids:
         ## 生成一個可以用的subjects
         all_subjs = get_subjects(subj1_selected=org_ids, subj2_selected=str_field_ids, year_selector=year_selector, subj1_obj=subj1_subjinfo, subj2_obj=subj2_subjinfo)
 
-        prESI_anaylsis.subjects = all_subjs
-        prESI_anaylsis.get_where_clauses = lambda table:None # 因為現階段都回傳null，所以暫時給一個方法可以被執行
-         
+        esi_anaylsis.subjects = all_subjs
+        esi_anaylsis.get_where_clauses = lambda table:None # 因為現階段都回傳null，所以暫時給一個方法可以被執行
+
         # run 計算，這邊包含匯出excel
-        re_export = prESI_anaylsis.run(esi_report)
+        re_export = esi_anaylsis.run(esi_report)
         
         if re_export is None:
             raise PRISError("計算完的資料是None")
@@ -288,7 +303,6 @@ def run_president_esi_report(file_name:str, template_types : list[int], org_ids:
         # 匯出報表
         export_file_path = esi_report.output_file
         re_export.export(export_file_path)
-        #export_file_path = prESI_anaylsis.export(report=esi_report, re_export=re_export)
 
         return export_file_path
 
@@ -362,7 +376,7 @@ def run_president_wos_report(
         raise PRISError("沒有輸入機構列表，無法分析")
     
     ## 機構
-    print(f"輸入機構數量 : {len(org_ids)}")
+    print(f"分析的機構數量 : {len(org_ids)}")
 
     if len(org_ids) == 1 and org_ids[0] == "TWU000001":
         ## 要抓台大院系級的再來檢查
@@ -381,24 +395,31 @@ def run_president_wos_report(
     year_selector = WOSYearSelector()
     year_selector.year_list = year_list
 
-    
-
     years = list(map(int, year_list))
     if not years:
         raise PRISError("年份列表不得為空")
 
+    print(f"分析的年份列表 : {years}")
+
     # 建立分析用的class
     wos_analysis = PresidentWOSAnalysis()
     # 設定部分參數的值(如果沒有就用預設值)
-    jcr_if_1 = other.get("jcr_if_1",0)
-    jcr_if_2 = other.get("jcr_if_2",0)
+    if_val_1 = other.get("if_val_1",0)
+    if_val_2 = other.get("if_val_2",0)
     range_year = other.get("range_year",0)
-    if jcr_if_1 > 0 and jcr_if_1 < 100:
-        wos_analysis.if_val_1 = jcr_if_1
-    if jcr_if_2 > 0 and jcr_if_2 < 100:
-        wos_analysis.if_val_2 = jcr_if_2
-    if range_year > 0 and range_year < 10:
+    if if_val_1 > 0 and if_val_1 < 100:
+        wos_analysis.if_val_1 = if_val_1
+    if if_val_2 > 0 and if_val_2 < 100:
+        wos_analysis.if_val_2 = if_val_2
+    if range_year > 1 and range_year < 10:
         wos_analysis.range_year = range_year
+    print(f"高影響期刊係數1 : {wos_analysis.if_val_1}%")
+    print(f"高影響期刊係數2 : {wos_analysis.if_val_2}%")
+    print(f"N年成長率 : {wos_analysis.range_year}年")
+
+    range_year_list = Util.get_year_range_list(year_selector.year_list, year_range=wos_analysis.range_year)
+    if len(range_year_list) <= 2:
+        raise PRISError(f"N年成長率的參數設定有誤，range_year = {wos_analysis.range_year}，year_list={year_list}")
 
     ## 報表
     wos_report = create_wos_report(file_name, template_types, target_name, year_format, source_name, min(years), max(years), wos_analysis)
@@ -423,7 +444,6 @@ def run_president_wos_report(
     # 匯出報表
     export_file_path = wos_report.output_file
     re_export.export_wos(export_file_path)
-    #export_file_path = wos_analysis.export(report=wos_report, re_export=re_export)
 
     return export_file_path
 
@@ -452,12 +472,14 @@ def run_report(**kwargs):
 
     # 先判斷路徑是否存在，不存在生成一個資料夾
     os.makedirs(output_path, exist_ok=True)      # [整理] 避免 isdir 與 makedirs 之間的競態
-
+    run_analysis = {
+        AnalysisItemType.PaperPresidentReportESI : run_president_esi_report,
+        AnalysisItemType.PaperPresidentReport : run_president_wos_report
+    }
+    
     try:
-        if analysis_type == AnalysisItemType.PaperPresidentReportESI:
-            return run_president_esi_report(**kwargs)
-        elif analysis_type == AnalysisItemType.PaperPresidentReport:
-            return run_president_wos_report(**kwargs)
+        if AnalysisItemType(analysis_type) in run_analysis:
+            return run_analysis[AnalysisItemType(analysis_type)](**kwargs)
         else:
             rprint("[red]分析項目目前只有校長報表ESI/WOS,程式結束。[/red]")
             raise PRISError(f"分析項目目前只有校長報表ESI/WOS，receive type:{analysis_type}")

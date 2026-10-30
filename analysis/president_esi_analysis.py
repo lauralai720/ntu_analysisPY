@@ -40,9 +40,10 @@ class FieldSubjectType:
 class PresidentESIAnalysis(Analysis):
     main_ver : str = ""         # 主要版本年份區間，x-y年
     comp_ver : str = ""         # 比較版本年份區間，x-y年
-    main_ver_key : str = ""     # 主要版本的key 
-    comp_ver_key : str = ""     # 比較版本的key
+    main_ver_key : str = ""     # 主要版本的db key 
+    comp_ver_key : str = ""     # 比較版本的db key
     get_where_clauses: Callable[["Table"], list["Where"]] = None    # 額外的where條件
+    top_n : int = ESI_TOP_N     # F5F6的前N名，預設前3名
 
     def __post_init__(self):
         self._esi_field_info = None
@@ -84,8 +85,8 @@ class PresidentESIAnalysis(Analysis):
         self._cited_world_rank_by_sub_fields = ResettableLazy(self._fetch_cited_world_rank_by_sub_fields)
         self._cited_asia_pacific_rank_by_sub_fields = ResettableLazy(self._fetch_cited_asia_pacific_rank_by_sub_fields)
 
-        self._field_paper_count_top_N_Org = ResettableLazy(self._fetch_field_paper_count_top_N_Org)
-        self._field_cited_top_N_Org = ResettableLazy(self._fetch_field_cited_top_N_Org)
+        self._field_paper_count_top_n_org = ResettableLazy(self._fetch_field_paper_count_top_n_org)
+        self._field_cited_top_n_org = ResettableLazy(self._fetch_field_cited_top_n_org)
 
 
     @property
@@ -199,11 +200,11 @@ class PresidentESIAnalysis(Analysis):
         return self._cited_asia_pacific_rank_by_sub_fields.value
     ### ==== F5、F6
     @property
-    def field_paper_count_top_N_Org(self) -> dict[str, list[str]]:
-        return self._field_paper_count_top_N_Org.value
+    def field_paper_count_top_n_org(self) -> dict[str, list[str]]:
+        return self._field_paper_count_top_n_org.value
     @property
-    def field_cited_top_N_Org(self) -> dict[str, list[str]]:
-        return self._field_cited_top_N_Org.value
+    def field_cited_top_n_org(self) -> dict[str, list[str]]:
+        return self._field_cited_top_n_org.value
 
 
     # 原本是在FieldPanel執行的，把值拉到Analysis存放
@@ -423,7 +424,7 @@ class PresidentESIAnalysis(Analysis):
         return res
 
     ### F5、F6
-    def get_top_3Org(self, db_col_name : str) -> dict[str, list[str]]:
+    def get_top_n_org(self, db_col_name : str) -> dict[str, list[str]]:
         cmd_orgs_clause = "', '".join(self.selected_orgs_str)
         cmd_field_clause = ", ".join(sub_id for x in self.maj_fields_and_sub_fields for sub_id in x[1])
         cmd_str = (
@@ -439,12 +440,10 @@ class PresidentESIAnalysis(Analysis):
             f"{db_schema.schema.OrgSerialColumnName} IN ('{cmd_orgs_clause}') " +
             f") O GROUP BY {db_schema.schema.ESICategoryColumnName}, {db_schema.schema.OrgSerialColumnName}" +
             f") S " +
-            f") R WHERE Rank <= 3"
+            f") R WHERE Rank <= {self.top_n}"
         )
         query_res= dal.query_2d_raw(cmd_str)
-# return qret.Select(x => new { ESI = x[0], Serial = x[1], Rank = x[2] })
-#            .GroupBy(x => x.ESI)
-#            .ToDictionary(k => k.Key, v => v.OrderBy(x => x.Rank).Select(x => x.Serial).ToList());
+
         groups = defaultdict(list)
         for x in query_res:
             field = str(x[0])
@@ -456,10 +455,10 @@ class PresidentESIAnalysis(Analysis):
         }
         return res
 
-    def _fetch_field_paper_count_top_N_Org(self) -> dict[str, list[str]]:
-        return self.get_top_N_Org(db_schema.schema.PaperCountColumnName)
-    def _fetch_field_cited_top_N_Org(self) -> dict[str, list[str]]:
-        return self.get_top_N_Org(db_schema.schema.CiteColumnName)
+    def _fetch_field_paper_count_top_n_org(self) -> dict[str, list[str]]:
+        return self.get_top_n_org(db_schema.schema.PaperCountColumnName)
+    def _fetch_field_cited_top_n_org(self) -> dict[str, list[str]]:
+        return self.get_top_n_org(db_schema.schema.CiteColumnName)
 
     ## 計算
     def run(self, report : PresidentESIReport) -> ReportExporter:
@@ -498,8 +497,8 @@ class PresidentESIAnalysis(Analysis):
             TemplateType.F2: lambda: (F2(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f2_rows()), # ESI分領域論文總數及亞太排名
             TemplateType.F3: lambda: (F3(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f3_rows()), # ESI分領域論文被引次數、平均被引次數及世界排名
             TemplateType.F4: lambda: (F4(sheet_name, self.main_ver, self.selected_orgs, idx), self.get_f4_rows()), # ESI分領域論文被引次數、平均被引次數及亞太排名
-            TemplateType.F5: lambda: (F5(sheet_name, idx), self.get_f5_rows()), # ESI分領域論文總數前3名
-            TemplateType.F6: lambda: (F6(sheet_name, idx), self.get_f6_rows()), # ESI分領域論文被引次數前3名
+            TemplateType.F5: lambda: (F5(sheet_name, idx, self.top_n), self.get_f5_rows()), # ESI分領域論文總數前3名
+            TemplateType.F6: lambda: (F6(sheet_name, idx, self.top_n), self.get_f6_rows()), # ESI分領域論文被引次數前3名
         }
 
         if template_type not in builders:
@@ -781,9 +780,9 @@ class PresidentESIAnalysis(Analysis):
                 res.append(row)
         return res
     def get_f5_rows(self) -> list[list[str]] :
-        return self.get_f5_f6_rows(self.field_paper_count_top_N_Org, self.paper_count_world_rank_by_sub_fields, self.paper_count_asia_pacific_rank_by_sub_fields)
+        return self.get_f5_f6_rows(self.field_paper_count_top_n_org, self.paper_count_world_rank_by_sub_fields, self.paper_count_asia_pacific_rank_by_sub_fields)
     def get_f6_rows(self) -> list[list[str]] :
-        return self.get_f5_f6_rows(self.field_cited_top_N_Org, self.cited_world_rank_by_sub_fields, self.cited_asia_pacific_rank_by_sub_fields)
+        return self.get_f5_f6_rows(self.field_cited_top_n_org, self.cited_world_rank_by_sub_fields, self.cited_asia_pacific_rank_by_sub_fields)
 
     ### static Method =============================================================================================
     # 取得相對排名

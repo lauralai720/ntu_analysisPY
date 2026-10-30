@@ -9,6 +9,7 @@ from components.template import Template,TemplateType
 # PRIS
 from export.excel_report import *
 from components import PaperOrg
+import common.util as Util
 
 class Template_ESI(Template):
     def __init__(self, sheet_name: str, main_ver: str, comp_ver: str, sheet_index: int):
@@ -557,9 +558,9 @@ class F4(F3):
 
 
 class F5(Template_ESI):
-    def __init__(self, sheet_name: str, sheet_index: int):
+    def __init__(self, sheet_name: str, sheet_index: int, top_n:int):
         super().__init__(sheet_name, "", "", sheet_index)  # 對應 : base(...)
-
+        
         self._excel_func: dict[int, str] = {
             4: Template.DefaultExcelFuncInteger,
             5: Template.DefaultExcelFuncInteger,
@@ -570,12 +571,8 @@ class F5(Template_ESI):
         }
         self._cols_without_format: set[int] = {1, 2, 3, 6, 9}
         self.template_type = TemplateType.F5
+        self.top_n = top_n
         
-
-    # @property
-    # def ColsWithoutFormat(self) -> set[int]:
-    #     return self._cols_without_format
-
     @property
     def val_col_header_name(self) -> str:
         return "論文數"
@@ -586,28 +583,24 @@ class F5(Template_ESI):
         field =ExcelColumnHeader(name="領域", merge_row_range=2, width=15) 
         esi_field =ExcelColumnHeader(name="ESI領域", merge_row_range=2, width=33) 
         val =ExcelColumnHeader(name=self.val_col_header_name)
-        first =ExcelColumnHeader(name="第一名機構",width=22)
-        world_rank_1st = ExcelColumnHeader(name="世界排名",width=12)
-        asia_pacific_rank_1st = ExcelColumnHeader(name="亞太排名",width=12)
-        second =ExcelColumnHeader(name="第二名機構",width=22)
-        world_rank_2st = ExcelColumnHeader(name="世界排名",width=12)
-        asia_pacific_rank_2st = ExcelColumnHeader(name="亞太排名",width=12)
-        third =ExcelColumnHeader(name="第三名機構",width=22)
-        world_rank_3st = ExcelColumnHeader(name="世界排名",width=12)
-        asia_pacific_rank_3st = ExcelColumnHeader(name="亞太排名",width=12)
 
-        val.sub_headers = [
-            first, world_rank_1st,asia_pacific_rank_1st, 
-            second,world_rank_2st,asia_pacific_rank_2st,
-            third,world_rank_3st,asia_pacific_rank_3st,
-        ]
+        org_header_name = "第{0}名機構"
+        world_rank_header_name = "世界排名"
+        asia_pacific_rank_header_name = "亞太排名"
+        val.sub_headers = []
+        for i in range(1, self.top_n+1):
+            org_header = ExcelColumnHeader(name=org_header_name.format(Util.get_num_ch(i)),width=22)
+            world_rank_header = ExcelColumnHeader(name=world_rank_header_name,width=12)
+            asia_pacific_rank_header = ExcelColumnHeader(name=asia_pacific_rank_header_name,width=12)
+            val.sub_headers.extend([org_header, world_rank_header, asia_pacific_rank_header])
+
         banner.sub_headers = [field, esi_field, val]
         report.headers = [banner]
         return report
 
 class F6(F5):
-    def __init__(self, sheet_name: str, sheet_index: int):
-        super().__init__(sheet_name, sheet_index)  # 對應 : base(...)
+    def __init__(self, sheet_name: str, sheet_index: int, top_n:int):
+        super().__init__(sheet_name, sheet_index, top_n)  # 對應 : base(...)
         self.template_type = TemplateType.F6
 
     @property
